@@ -1,0 +1,129 @@
+`-------------------------------------------------------------------------
+Copyright (C) 2018 David Papp and Sercan Yildiz.
+
+Authors:  
+         David Papp       <dpapp@ncsu.edu>
+         Sercan Yildiz    <syildiz@email.unc.edu>
+
+Date: 06/14/2018
+
+This code has been developed and tested with Matlab R2016b.
+-------------------------------------------------------------------------
+
+
+
+CONTENTS
+
+alfonso.m
+ALgorithm FOr Non-Symmetric Optimization
+This code is an implementation of the algorithm for non-symmetric conic 
+optimization which originally appeared in:
+
+A. Skajaa and Y. Ye, A homogeneous interior-point algorithm for nonsymmetric 
+convex conic optimization, Mathematical Programming Ser. A, 150 (2015), 
+pp. 391-422. Available at https://doi.org/10.1007/s10107-014-0773-1.
+
+The implementation is based on the corrected analysis of the algorithm
+presented in:
+
+D. Papp and S. Yildiz. On “A homogeneous interior-point algorithm for
+nonsymmetric convex conic optimization”. Available at 
+https://arxiv.org/abs/1712.00492.
+
+
+polyEnv.m
+This code is an implementation of the sum-of-squares optimization approach 
+based on non-symmetric conic optimization and polynomial interpolants 
+presented in:
+
+D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
+programming. Available at https://arxiv.org/abs/1712.01792.
+
+The implementation formulates and solves the polynomial envelope problem
+described in the same reference. 
+
+
+random_lp.m
+This code formulates and solves a random linear programming problem.
+
+
+demo_polyEnv.m
+This script demonstrates how to use the provided methods to solve the
+polynomial envelope problem described in:
+
+D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
+programming. Available at https://arxiv.org/abs/1712.01792.
+
+
+demo_polyOpt.m
+This script demonstrates how to use the provided methods to solve the
+polynomial optimization problems described in:
+
+D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
+programming. Available at https://arxiv.org/abs/1712.01792.
+
+
+demo_lp.m
+This script demonstrates how to use the provided methods to solve a 
+random linear programming problem.
+
+
+residual3p.m
+This code is an implementation of the triple-precision accumulated inner
+product and residual computation. It was adapted from the code of 
+Cleve Moler from a MATLAB Central Blog post which is available at
+https://blogs.mathworks.com/cleve/2015/03/02/triple-precision-accumlated-inner-product/.
+
+
+ChebInterval.m
+This code generates parameters for the interpolant basis representation
+of univariate sum-of-squares polynomials.
+
+
+PaduaSquare.m
+This code generates parameters for the interpolant basis representation
+of bivariate sum-of-squares polynomials.
+
+
+FeketeCube.m
+This code generates parameters for the interpolant basis representation
+of sum-of-squares polynomials with three or more variables. It follows
+the approach described in:
+
+A. Sommariva and M. Vianello, Computing approximate Fekete points by QR
+factorizations of Vandermonde matrices, Computers & Mathematics with
+Applications, 57 (2009), pp. 1324-1336. Available at
+https://doi.org/10.1016/j.camwa.2008.11.011.
+
+
+polyOpt.m
+This code is an implementation of the sum-of-squares optimization approach 
+based on non-symmetric conic optimization and polynomial interpolants 
+presented in:
+
+D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
+programming. Available at https://arxiv.org/abs/1712.01792.
+
+The implementation formulates and solves the polynomial optimization
+problems described in the same reference. 
+
+
+EXTERNAL FUNCTIONS CALLED IN THE PACKAGE
+
+chebpts, chebpolyval from Chebfun. Chebfun is an open-source package for  
+numerical computing with functions: http://www.chebfun.org/.
+Our code has been developed and tested with Chebfun version 5.5.0.  
+The latest version of the Chebfun package can be downloaded from
+http://www.chebfun.org/download/.
+
+
+pdpts, pdwtsMM from Padua2DM. Padua2DM is a Matlab package from M. Caliari,
+S. De Marchi, A. Sommariva, and M. Vianello for interpolation and
+cubature at the Padua points. It can be downloaded from
+http://profs.sci.univr.it/~caliari/software.htm.
+
+
+partitions. The partitions function computes all partitions of an integer.
+We use the implementation of John D'Errico from a MATLAB Central File 
+Exchange post which is available at
+https://www.mathworks.com/matlabcentral/fileexchange/12009-partitions-of-an-integer.

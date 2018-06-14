@@ -1,5 +1,4 @@
-# alfonso
-alfonso: ALgorithm For Non-Symmetric Optimization
+**alfonso: ALgorithm FOr Non-Symmetric Optimization**
 
 This package is an implementation of the algorithm for nonsymmetric conic optimization which originally appeared in:
 
@@ -7,7 +6,7 @@ A. Skajaa and Y. Ye, A homogeneous interior-point algorithm for nonsymmetric con
 
 The implementation is based on the corrected analysis of the algorithm presented in:
 
-D. Papp and S. Yıldız. On "A homogeneous interior-point algorithm for nonsymmetric convex conic optimization". [https://arxiv.org/abs/1712.00492](https://arxiv.org/abs/1712.00492)
+D. Papp and S. Yıldız. On “A homogeneous interior-point algorithm for nonsymmetric convex conic optimization”. [https://arxiv.org/abs/1712.00492](https://arxiv.org/abs/1712.00492)
 
 The package also includes an implementation of the sum-of-squares optimization approach based on non-symmetric conic optimization and polynomial interpolants presented in:
 
