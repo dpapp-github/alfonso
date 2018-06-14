@@ -11,4 +11,4 @@ D. Papp and S. Yıldız. On "A homogeneous interior-point algorithm for nonsymme
 
 The package also includes an implementation of the sum-of-squares optimization approach based on non-symmetric conic optimization and polynomial interpolants presented in:
 
-D. Papp and S. Yıldız. Sum-of-squares optimization without semidefinite programming. Available [https://arxiv.org/abs/1712.01792](https://arxiv.org/abs/1712.01792)
+D. Papp and S. Yıldız. Sum-of-squares optimization without semidefinite programming. [https://arxiv.org/abs/1712.01792](https://arxiv.org/abs/1712.01792)
