@@ -1,4 +1,4 @@
-#alfonso#
+#alfonso
 
 **alfonso: ALgorithm FOr Non-Symmetric Optimization**
 
