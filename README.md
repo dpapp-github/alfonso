@@ -1,3 +1,5 @@
+#alfonso#
+
 **alfonso: ALgorithm FOr Non-Symmetric Optimization**
 
 This package is an implementation of the algorithm for nonsymmetric conic optimization which originally appeared in:
