@@ -83,7 +83,7 @@ function results = random_lp(m, n, tol, seed)
     x0 = repmat(sqrt(rP*rD),n,1);
     
     % CUSTOM ALGORITHMIC OPTIONS
-    opts.tol = tol;
+    opts.optimTol = tol;
     
     % CALL TO alfonso 
     results = alfonso(probData, x0, @gH_lp, gH_Params, opts);
