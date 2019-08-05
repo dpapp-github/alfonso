@@ -18,7 +18,7 @@
 %          David Papp       <dpapp@ncsu.edu>
 %          Sercan Yildiz    <syildiz@email.unc.edu>  
 %
-% Date: 
+% Date: 06/30/2019
 % 
 % This code has been developed and tested with Matlab R2016b.
 % -------------------------------------------------------------------------
@@ -41,10 +41,9 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 % - probData.c:                 cost vector
 % x0:                           initial primal iterate
 % gH:                           method for computing the gradient and 
-%                               Hessian of the barrier function
-% gH_Params:                    parameters associated with the method gH
-% - gH_Params.bnu:              complexity parameter of the augmented
-%                               barrier (nu-bar)
+%                               the factored Hessian of the barrier function
+% gH_Params:                    parameters required by the method gH; may
+%                               be replaced by [] if no parameters needed
 % opts:                         algorithmic options
 % - opts.predLineSearch:        0 if a fixed step size is to be used in the 
 %                               predictor step. 1 if the step size is to be 
@@ -72,6 +71,8 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 %
 % OUTPUT
 % results:                  final solution and iteration statistics
+% - results.status          solver status: 1 = success, 0 = infeasible problem, everything else is trouble
+% - results.statusString    solver status string
 % - results.nIterations:	total number of iterations
 % - results.alphaPred:      predictor step size at each iteration
 % - results.betaPred:       neighborhood parameter at the end of the
@@ -114,6 +115,24 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
    
     % checks the problem data for consistency
     inputCheck(probData);
+
+    % check the initial point and compute the barrier parameter of the barrier function
+    [in, g] = gH(x0, gH_Params);
+    if ~in
+        error('Specified initial point is not in the cone.');
+    end
+    bnu = (-g'*x0) + 1;  % nu-bar = nu+1, where nu = g(x0)'*x0 is the barrier parameter;
+    if isfield(gH_Params,'bnu')
+        if ~(gH_Params.bnu==bnu)
+            error('Wrong gH_Params.bnu specified');
+        end
+    else
+        gH_Params.bnu = bnu;
+        if opts.verbose
+            disp(['Barrier parameter set to nu = ', num2str(bnu-1)]);
+        end
+    end
+    
     
     [m, n] = size(probData.A);
     A = probData.A;
@@ -129,9 +148,12 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 
     % sets the solution method for the Newton system
     myLinSolve = @linSolve3;
-    
+   
     % sets algorithmic parameters
     algParams = setAlgParams(gH_Params, opts);
+    
+    results.status = 1;
+    results.statusString = '';
     
     % creates arrays for iteration statistics
     results.alphaPred   = zeros(algParams.maxIter, 1);
@@ -147,8 +169,10 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
     % creates the central primal-dual iterate corresponding to x0
     soln = initSoln(x0, probData, gH, gH_Params);
     
-    termFlag = 0;
-    numIters = 0;
+    termFlag  = 0;
+    numIters  = 0;
+    stopwatch = tic;
+    elapsed   = 0;
     for iter = 1:algParams.maxIter
 
         % checks progress towards termination criteria
@@ -163,8 +187,8 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
         
         % prints progress metrics
         if mod(iter,1)==0 && opts.verbose
-            fprintf('%d: pObj=%d pIn=%d dIn=%d gap=%d tau=%d kap=%d mu=%d\n',...
-            iter, metrics.O, metrics.P, metrics.D, metrics.A, soln.tau, soln.kappa, soln.mu);
+            fprintf('%3d: pObj=%.6e pIn=%#.2e dIn=%#.2e gap=%#.2e tau=%#.2e kap=%#.2e mu=%.2e t=%#.2f s\n',...
+            iter, metrics.O, metrics.P, metrics.D, metrics.A, soln.tau, soln.kappa, soln.mu, elapsed);
         end
 
         % PREDICTOR PHASE
@@ -197,7 +221,7 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
                 if (opts.corrCheck && corrIter < algParams.maxCorrSteps) || corrIter == algParams.maxCorrSteps
                     results.etaCorr(iter) = sqrt(sum((soln.L\soln.psi(1:end-1)).^2) +...
                         (soln.tau*soln.psi(end))^2)/soln.mu;
-                    if results.etaCorr(iter) <= algParams.eta; break; end;
+                    if results.etaCorr(iter) <= algParams.eta; break; end
                 end
             end
             % raises a termination flag if corrector phase was not successful
@@ -207,10 +231,12 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
             end
         end
         results.mu(iter) = soln.mu;
+        
+        elapsed = toc(stopwatch);
     end
     
     % prepares final solution and iteration statistics
-    results = prepResults(results, soln, probData, numIters);
+    results = prepResults(results, status, soln, probData, numIters);
 
 return
 
@@ -296,7 +322,7 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
             % either the previous iterate was outside the beta-neighborhood
             % or increasing alpha again will make it > 1 
             if alphaPrevOK == 0 || alpha > algParams.predLSMulti
-                if opts.predLineSearch == 1; algParams.alphaPred = alpha; end;
+                if opts.predLineSearch == 1; algParams.alphaPred = alpha; end
                 break;
             end
             alphaPrevOK     = 1;
@@ -310,7 +336,7 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
                 alpha       = alphaPrev;
                 betaAlpha   = betaAlphaPrev;
                 solnAlpha   = solnAlphaPrev;
-                if opts.predLineSearch == 1; algParams.alphaPred = alpha; end;
+                if opts.predLineSearch == 1; algParams.alphaPred = alpha; end
                 break;
             end
             % last two iterates were outside the beta-neighborhood and
@@ -320,7 +346,7 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
                 alpha       = 0;
                 betaAlpha   = Inf; % overwritten later in alfonso
                 solnAlpha   = soln;
-                if opts.predLineSearch == 1; algParams.alphaPred = alpha; end;
+                if opts.predLineSearch == 1; algParams.alphaPred = alpha; end
                 break;
             end
             % alphaPrev, betaAlphaPrev, solnAlphaPrev will not be used
@@ -428,13 +454,14 @@ function dsoln = linSolveMain(soln, probData, RHS, myLinSolve, algParams, opts)
             
             LHS                         = probData.LHS;    
             LHS(m+n+1+(1:n),m+(1:n))    = soln.mu*soln.H;
+            %LHS(m+n+1+(1:n),m+(1:n))    = soln.mu*(soln.L*soln.L');
             LHS(end,m+n+1)              = soln.mu/soln.tau^2;
             
             exitFlag    = 0;
             res         = residual3p(LHS, delta, RHS);
             resNorm     = norm(res);  
             for iter = 1:opts.maxItRefineSteps
-                if exitFlag; break; end;
+                if exitFlag; break; end
                 d           = myLinSolve(soln, probData, res);
                 deltaNew	= delta - d;
                 resNew      = residual3p(LHS, deltaNew, RHS);
@@ -486,21 +513,36 @@ function [delta, probData] = linSolve3(soln, probData, RHS)
     c = probData.c;
     [m, n] = size(A);
     
+    if issparse(A) && nnz(soln.L)/numel(soln.L) < 1e-2
+        L = sparse(soln.L);
+        b = sparse(b);
+        c = sparse(c);
+        RHS = sparse(RHS);
+    else
+        L = full(soln.L);
+    end
+    
     ry     = RHS(1:m);
     rx     = RHS(m+(1:n));
     rtau   = RHS(m+n+1);
     rs     = RHS(m+n+1+(1:n));
     rkappa = RHS(end);
-    
-    Hic     = soln.L'\(soln.L\c);
-    HiAt    = -soln.L'\(soln.L\A');
-    Hirxrs  = soln.L'\(soln.L\(rx+rs));
-    
-    LHSdydtau   = [zeros(m), -b; b', soln.mu/soln.tau^2] - [A; -c']*[HiAt, Hic]/soln.mu;
+
+    %LiAt    = L\A';
+    %Lic     = L\c;
+    %AHic    = LiAt'*Lic;
+    %LHSdydtau   = [sparse(m,m), -b; b', soln.mu/soln.tau^2] + [LiAt'*LiAt, -AHic; -AHic', Lic'*Lic]/soln.mu;
+
+    Hic     = L'\(L\c);
+    HiAt    = -L'\(L\A');
+    LHSdydtau   = [zeros(m,m), -b; b', soln.mu/soln.tau^2] - [A; -c']*[HiAt, Hic]/soln.mu;
+
+    Hirxrs      = L'\(L\(rx+rs));
     RHSdydtau   = [ry; rtau+rkappa] - [A; -c']*Hirxrs/soln.mu;
     dydtau      = LHSdydtau\RHSdydtau;
+    %%dx          = (Hirxrs + L'\([LiAt, -Lic]*dydtau))/soln.mu;
     dx          = (Hirxrs - [HiAt, Hic]*dydtau)/soln.mu;
-
+    
     delta               = zeros(m+2*n+2, 1);
     delta(1:m)          = dydtau(1:m);
     delta(m+n+1)        = dydtau(m+1);
@@ -509,6 +551,7 @@ function [delta, probData] = linSolve3(soln, probData, RHS)
     delta(end)          = -rtau + b'*dydtau(1:m) - c'*dx;
     
 return
+
 
 function opts = setOpts(opts)
 % This method sets the empty algorithmic options to their default values.
@@ -526,14 +569,14 @@ function opts = setOpts(opts)
 % None.
 % --------------------------------------------------------------------------
            
-    if ~isfield(opts, 'predLineSearch'); opts.predLineSearch = 1; end;
-    if ~isfield(opts, 'maxCorrSteps'); opts.maxCorrSteps = 4; end;
-    if ~isfield(opts, 'corrCheck'); opts.corrCheck = 1; end;
-    if ~isfield(opts, 'optimTol'); opts.optimTol = 1e-06; end;
-    if ~isfield(opts, 'maxCorrLSIters'); opts.maxCorrLSIters = 8; end;
-    if ~isfield(opts, 'maxPredSmallSteps'); opts.maxPredSmallSteps = 8; end;
-    if ~isfield(opts, 'maxItRefineSteps'); opts.maxItRefineSteps = 0; end;    
-    if ~isfield(opts, 'verbose'); opts.verbose = 1; end;
+    if ~isfield(opts, 'predLineSearch'); opts.predLineSearch = 1; end
+    if ~isfield(opts, 'maxCorrSteps'); opts.maxCorrSteps = 4; end
+    if ~isfield(opts, 'corrCheck'); opts.corrCheck = 1; end
+    if ~isfield(opts, 'optimTol'); opts.optimTol = 1e-06; end
+    if ~isfield(opts, 'maxCorrLSIters'); opts.maxCorrLSIters = 8; end
+    if ~isfield(opts, 'maxPredSmallSteps'); opts.maxPredSmallSteps = 8; end
+    if ~isfield(opts, 'maxItRefineSteps'); opts.maxItRefineSteps = 0; end
+    if ~isfield(opts, 'verbose'); opts.verbose = 1; end
     
 return
 
@@ -571,7 +614,7 @@ function algParams = setAlgParams(gH_Params, opts)
 % --------------------------------------------------------------------------
 
     algParams.maxIter           = 10000;
-    algParams.optimTol            = opts.optimTol;
+    algParams.optimTol          = opts.optimTol;
     
     algParams.alphaCorr         = 1.0;
     algParams.predLSMulti       = 0.7;
@@ -630,6 +673,12 @@ function algParams = setAlgParams(gH_Params, opts)
                 algParams.eta        = 0.0332;
                 cPredFix             = 0.0525;
             end
+%         case 22 % this is 1, EXPERIMENTAL ???
+%             algParams.beta = 0.20;
+%             algParams.eta  = 0.20*0.5;
+%             cPredFix       = 0.02;
+%             algParams.maxCorrSteps = 1;
+%             opts.predLineSearch = 0;
         otherwise
             error('The maximum number of corrector steps can be 1, 2, or 4.');
     end
@@ -725,18 +774,27 @@ function [status, metrics] = term(soln, probData, algParams, termConsts)
     mu0 = 1;
 
     % termination criteria
-    P =    metrics.P   <= algParams.optimTol;
-    D =    metrics.D   <= algParams.optimTol;
-    G =    metrics.G   <= algParams.optimTol;
-    AA =   metrics.A   <= algParams.optimTol;
-    T =    tau <= algParams.optimTol * 1e-02 * max(1, kappa);
-    K =    tau <= algParams.optimTol * 1e-02 * min(1, kappa);
-    M =    mu  <= algParams.optimTol * 1e-02 * mu0;
+    tol = algParams.optimTol;
+    P   =    metrics.P   <= tol;
+    D   =    metrics.D   <= tol;
+    G   =    metrics.G   <= tol;
+    AA  =    metrics.A   <= tol;
+    T   =    tau <= tol * 1e-02 * max(1, kappa);
+    K   =    tau <= tol * 1e-02 * min(1, kappa);
+    M   =    mu  <= tol * 1e-02 * mu0;
 
     if P && D && AA
-        status = 'Feasible and approximate optimal solution found.';
+        status = 'Approximately optimal solution found.';
     elseif P && D && G && T
-        status = 'Problem nearly primal or dual infeasible.';
+        if by > -tol && cx > -tol
+            status = 'Primal infeasibility detected.';
+        elseif by < tol && cx < tol
+            status = 'Dual infeasibility detected.';
+        elseif by > -tol && cx < tol
+            status = 'Primal and dual infeasibility detected.';
+        else
+            status = 'Problem is nearly primal or dual infeasible.';
+        end
     elseif K && M
         status = 'Problem is ill-posed.';
     else
@@ -745,7 +803,7 @@ function [status, metrics] = term(soln, probData, algParams, termConsts)
 
 return
 
-function results = prepResults(results, soln, probData, iter)
+function results = prepResults(results, status, soln, probData, iter)
 % This method prepares the final solution and iteration statistics.
 % --------------------------------------------------------------------------
 % USAGE of "prepResults"
@@ -808,7 +866,32 @@ function results = prepResults(results, soln, probData, iter)
     % final relative primal and dual infeasibilities
     results.rel_pIn = results.pIn/(1+norm(probData.b,Inf));
     results.rel_dIn = results.dIn/(1+norm(probData.c,Inf));
+
+    switch status
+        case 'Approximately optimal solution found.'
+            results.status = 1;
+            
+        case 'Primal infeasibility detected.'
+            results.status = -1;
+            
+        case 'Dual infeasibility detected.'
+            results.status = -2;
+            
+        case 'Primal and dual infeasibility detected.'
+            results.status = -3;
+            
+        case 'Problem nearly primal or dual infeasible.'
+            results.status = -4;
+            
+        case 'Problem is ill-posed.'
+            results.status = -8;
+            
+        case 'UNKNOWN'
+            results.status = 99;
+    end
     
+    results.statusString    = status;
+
 return
 
 function [] = inputCheck(probData)
@@ -832,11 +915,11 @@ function [] = inputCheck(probData)
     if m <= 0 || n <= 0
         error('Input matrix A must be nontrivial.');
     end
-    if m ~= length(probData.b)
-        error('Size of vector b must match the number of rows in A.');
+    if m ~= size(probData.b,1)
+        error('Dimension of (column) vector b must match the number of rows in A.');
     end
-    if n ~= length(probData.c)
-        error('Size of vector c must match the number of columns in A.');
+    if n ~= size(probData.c,1)
+        error('Dimension of (column) vector c must match the number of columns in A.');
     end
         
 return
