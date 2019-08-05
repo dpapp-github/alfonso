@@ -31,6 +31,10 @@ nonsymmetric convex conic optimization”. Available at
 https://arxiv.org/abs/1712.00492.
 
 
+alfonso_simple.m
+This code implements a simple user-expandable interface for alfonso.
+
+
 polyEnv.m
 This code is an implementation of the sum-of-squares optimization approach 
 based on non-symmetric conic optimization and polynomial interpolants 
