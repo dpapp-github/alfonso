@@ -18,7 +18,7 @@
 %          David Papp       <dpapp@ncsu.edu>
 %          Sercan Yildiz    <syildiz@email.unc.edu>  
 %
-% Date: 06/30/2019
+% Date: 10/01/2019
 % 
 % This code has been developed and tested with Matlab R2016b.
 % -------------------------------------------------------------------------
@@ -123,8 +123,8 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
     end
     bnu = (-g'*x0) + 1;  % nu-bar = nu+1, where nu = g(x0)'*x0 is the barrier parameter;
     if isfield(gH_Params,'bnu')
-        if ~(gH_Params.bnu==bnu)
-            error('Wrong gH_Params.bnu specified');
+        if abs(gH_Params.bnu-bnu) > 1e-12
+            warning(sprintf('Specified and computed gH_Params.bnu arguments do not agree. Specified: %d; computed: %d', gH_Params.bnu, bnu));
         end
     else
         gH_Params.bnu = bnu;
@@ -236,7 +236,7 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
     end
     
     % prepares final solution and iteration statistics
-    results = prepResults(results, status, soln, probData, numIters);
+    results = prepResults(results, status, soln, probData, numIters, elapsed);
 
 return
 
@@ -803,7 +803,7 @@ function [status, metrics] = term(soln, probData, algParams, termConsts)
 
 return
 
-function results = prepResults(results, status, soln, probData, iter)
+function results = prepResults(results, status, soln, probData, iter, time)
 % This method prepares the final solution and iteration statistics.
 % --------------------------------------------------------------------------
 % USAGE of "prepResults"
@@ -829,6 +829,7 @@ function results = prepResults(results, status, soln, probData, iter)
 % --------------------------------------------------------------------------
 
     results.nIterations     = iter;
+    results.time            = time;
     
     % truncates arrays for iteration statistics
     results.alphaPred       = results.alphaPred(1:iter);
