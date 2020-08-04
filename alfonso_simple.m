@@ -1,8 +1,8 @@
-%ALFONSO_SIMPLE is a simple, user-expandable interface for alfonso for
+%ALFONSO_SIMPLE is a simple, user-extensible interface for alfonso for
 %  solving standard form problems involving pre-defined primitive cones
 %
 % ADD NEW CONES BY ADDING NEW CASES TO THE FUNCTIONS
-%   x0_K, gH_K, AND dimPreprocess (if necessary) BELOW
+%   x0_K, gH_K, and (if necessary) dimPreprocess IN THIS FILE
 %
 % -------------------------------------------------------------------------
 %
@@ -10,23 +10,26 @@
 % results = alfonso_simple(c, A, b, K, x0, opts)
 % -------------------------------------------------------------------------
 % INPUT
-% c:                 cost vector
-% A:                 constraint matrix
-% b:                 right-hand side vector
-% K:                 cone, given by a cell array with fields defining the
-%                       product of primitive cones to optimize over.
-%                    Example:
-%                        K{1}.type = 'socp';    % second-order cone
-%                        K{1}.dim  = 10;
-%                        K{2}.type = 'exp';     % exponential cone, always 3-dimensional
-%                        K{3}.type = 'lp';      % nonnegative orthant
-%                        K{3}.dim  = 10;
-% x0:                initial primal iterate, pass [] to let alfonso choose it
-% opts:              algorithmic options, see alfonso.m for details
-%
+% c:                    cost vector
+% A:                    constraint matrix
+% b:                    right-hand side vector
+% K:                    cone, given by a cell array with fields defining
+%                          the product of primitive cones to optimize over.
+%                       Example:
+%                           K{1}.type = 'socp';    % second-order cone
+%                           K{1}.dim  = 10;
+%                           K{2}.type = 'exp';     % exponential cone, always 3-dimensional
+%                           K{3}.type = 'lp';      % nonnegative orthant
+%                           K{3}.dim  = 10;
+% x0:                   initial primal iterate, pass [] to be chosen by alfonso
+% opts:                 algorithmic options, see alfonso.m for details
+%   - opts.preprocess:  1 (true) to clean up the input, 0 (false) otherwise.
+%                       Default value: 1
+%   All other options are passed to alfonso.
+% -------------------------------------------------------------------------
 % OUTPUT
-% results:           final solution and iteration statistics
-%                    see alfonso.m for details
+% results:              final solution and iteration statistics
+%                       see alfonso.m for details
 %
 % -------------------------------------------------------------------------
 % Copyright (C) 2018 David Papp and Sercan Yildiz.
@@ -35,7 +38,7 @@
 %          David Papp       <dpapp@ncsu.edu>
 %          Sercan Yildiz    <syildiz@email.unc.edu>  
 %
-% Date: 08/01/2019
+% Date: 07/20/2020
 % 
 % This code has been developed and tested with Matlab R2018a.
 % -------------------------------------------------------------------------
@@ -46,29 +49,55 @@
 
 function results = alfonso_simple(c, A, b, K, x0, opts)
 
-    % preprocess nonnexisting 'dim' fields and 0-dim cones
-    [K, Kdims] = dimPreprocess(K);
+    switch nargin
+        case 4
+            x0 = [];
+            opts = struct('preprocess', true);
+        case 5
+            opts = struct('preprocess', true);
+        case 6
+            if ~isfield(opts, 'preprocess')
+                opts.preprocess = true;
+            end
+        otherwise
+            error('alfonso_simple needs 4-6 input arguments');
+    end
+            
+    % clean up the cone
+    if opts.preprocess
+        K = dimPreprocess(K);
+    end
+    
+    if isempty(x0)
+        x0 = x0_K(K);
+    end
     
     inputCheck(A, b, c, K);
     
-    probData   = struct('c', c, 'A', A, 'b', b, 'Kdims', Kdims);
-    
-    param.K    = K;
-    if isempty(x0)
-        x0 = x0_K(K);
+    % basic preprocessing
+    if opts.preprocess
+        [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0);
     else
-        % we should check here what the user gave, but we don't at the moment
+        Kdims = dims(K);
     end
+    
+    % solve the problem with alfonso
+    probData   = struct('c', c, 'A', A, 'b', b, 'Kdims', Kdims);
+    param.K    = K;
     results    = alfonso(probData, x0, @gH_K, param, opts);
+    
+    % transform the solution back
+    if opts.preprocess
+        results.x = results.x(backTrafo);
+        results.s = results.s(backTrafo);
+    end
     
 return
 
 
-function x0 = x0_K(K)
 % x0_K(K) returns a central vector in K: a concatenation of pre-determined
 % central points of its component simple cones
-%
-% adding new cones requires adding a new case below
+function x0 = x0_K(K)
 
     n = 0;
     for i = 1:length(K)
@@ -78,13 +107,24 @@ function x0 = x0_K(K)
     x0 = zeros(n,1);
     n = 0;
     for i = 1:length(K)
-        switch K{i}.type             %%% ADD YOUR CONES HERE (1/3)
+        switch K{i}.type
             case {'l', 'lp'}
                 x = ones(K{i}.dim,1);
+            case {'free'}
+                x = zeros(K{i}.dim,1);
             case {'soc', 'socp'}
                 x = [1; zeros(K{i}.dim-1,1)];
             case {'rsoc'}
                 x = [sqrt(1/2); sqrt(1/2); zeros(K{i}.dim-2,1)];
+            case {'gpow'}
+                x = [ones(length(K{i}.lambda),1); 0]; % David's favorite
+                %x = [sqrt(1+K{i}.lambda); 0];        % more standard
+            case {'dgpow'}
+                x = [ones(length(K{i}.lambda),1); 0]; % David's favorite
+                %x = [sqrt(1+K{i}.lambda); 0];        % more standard
+            case {'exp'}
+                x = [0.7633336255892224; 0.4910129724669193; -0.4197952321239648];  % David's favorite
+                %x = [1.290927709856958; 0.8051020015847954; -0.8278383990656786];  % more standard
             otherwise
                 error(['unsupported cone type: ', K{i}.type]);
         end
@@ -94,23 +134,6 @@ function x0 = x0_K(K)
 
 return
 
-% gH_K(K) implements a barrier function for K computed from component simple cones
-%
-% INPUT
-% x:                 point at which the barrier is to be computed
-% params:            optional parameters to use in barrier computation:
-%  - params.K        mandatory parameter specifying the cone as a cell array
-%
-% OUTPUT
-% in:                1 (true) if x is in the interior of the cone, 0 (false) otherwise
-% g:                 gradient of the barrier function at x;   NaN if in = 0
-% H:                 Hessian of the barrier function at x;    NaN if in = 0
-% L:                 Cholesky factor of H (lower triangular); NaN if in = 0                    
-%
-% adding new cones requires adding a new case below
-% Tips:
-%   - use nargout to only compute whatever is necessary
-%   - using chol(H,'lower') for computing L is okay, but one can often do better
 
 function [in, g, H, L] = gH_K(x, params)
 
@@ -121,12 +144,12 @@ function [in, g, H, L] = gH_K(x, params)
     g   = zeros(size(x));
     Hs  = cell(nK,1);  % doesn't do much, but helps with a warning
     Ls  = cell(nK,1);  % doesn't do much, but helps with a warning
-    idx = 0; % x subvector index
+    idx = 0;           % x subvector index
     for i = 1:nK
         ni = K{i}.dim;
         xi = x(idx+1:idx+ni);
         
-        switch K{i}.type              %%% ADD YOUR CONES HERE (2/3)
+        switch K{i}.type
             case {'l', 'lp'}
                 gH      = @gH_LP;
                 params  = [];         % the dimension is the only parameter, but that is obtained directly from the length of the vector
@@ -136,9 +159,15 @@ function [in, g, H, L] = gH_K(x, params)
             case {'rsoc'}
                 gH      = @gH_RSOC;
                 params  = [];         % the dimension is the only parameter, but that is obtained directly from the length of the vector
-            %case {'exp'}
-            %    gH      = @gH_Exp;   % coming very soon... feel free to implement your own in the meantime :)
-            %    params  = [];
+            case {'gpow'}
+                gH      = @gH_GPow;
+                params  = K{i}.lambda;
+            case {'dgpow'}
+                gH      = @gH_DGPow;
+                params  = K{i}.lambda;
+            case {'exp'}
+                gH      = @gH_Exp;
+                params  = [];         % no parameters
             otherwise
                 error(['unsupported cone type: ', K{i}.type]);
         end
@@ -181,15 +210,29 @@ function [in, g, H, L] = gH_K(x, params)
 
 return
 
-% Makes sure that every cone in K has a field 'dim' that contains the
-% dimension of said cone. Useful for cones where the dimension is either
-% not a parameter (e.g., the exponential cone) or is not the natural
-% parameter (e.g., the SDP cone, whose dimension is n^2 or n*(n+1)/2,
-% depending on the implementation)
+function K = dimPreprocess(K)
+% This method performs some basic preprocessing on the cone structure K for
+% efficiency and compatibility with other functions. It should NOT be
+% called outside of alfonso_simple().
 %
-% may be used to clean up other edge cases, e.g., 0-dimensional cones
-
-function [K, Kdims] = dimPreprocess(K)   %%% ADD YOUR CONES HERE 3/3 (not needed to change this for most cones)
+% Included functionality:
+%  - add missing 'dim' fields to cones for which the dimension is not the
+%    natural parameter (e.g., exponential cone, semidefinite cone)
+%  - remove 0-dimensional cones
+%
+% --------------------------------------------------------------------------
+% USAGE of "dimPreprocess"
+% K = dimPreprocess(K)
+% --------------------------------------------------------------------------
+% INPUT
+% K:            cone structure
+%
+% OUTPUT
+% K:            updated cone structure
+% --------------------------------------------------------------------------
+% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
+% None.
+% --------------------------------------------------------------------------
 
     for i=length(K):-1:1
         if ~isfield(K{i},'dim')
@@ -205,12 +248,103 @@ function [K, Kdims] = dimPreprocess(K)   %%% ADD YOUR CONES HERE 3/3 (not needed
         end
     end
     
+return
+
+function [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0)
+% This method performs some basic preprocessing on the primal problem for
+% efficiency and compatibility with other functions. It should NOT be
+% called outside of alfonso_simple().
+%
+% Included functionality:
+%  - move free variables into a single second-order cone
+%  - move nonnegative variables into a single orthant
+%
+% --------------------------------------------------------------------------
+% USAGE of "dimPreprocess"
+% [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0)
+% --------------------------------------------------------------------------
+% INPUT
+% c, A, b, K:   problem data and cone structure
+% x0:           initial point
+%
+% OUTPUT
+% c, A, b, K:   updated problem data and cone structure
+% x0:           updated initial point
+% Kdims:        array of integers, contains the dimensions of K{i}
+% trafo
+% backTrafo:      
+%
+% --------------------------------------------------------------------------
+% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
+% None.
+% --------------------------------------------------------------------------
+
+    [m,n] = size(A);
+    freeVars   = false(n,1);
+    nonnegVars = false(n,1);
+    keepCones  = false(length(K),1);
+    
+    % find all the variables we might want to move
+    idx = 0;
+    for i=1:length(K)
+        if strcmpi(K{i}.type, 'free')
+            freeVars(idx+1 : idx+K{i}.dim) = true;
+        elseif strcmpi(K{i}.type, 'l') || strcmpi(K{i}.type, 'lp')
+            nonnegVars(idx+1 : idx+K{i}.dim) = true;
+        else
+            keepCones(i) = true;
+        end
+        idx = idx + K{i}.dim;
+    end
+    
+    otherVars = ~(freeVars | nonnegVars);
+    dummy     = any(freeVars);
+    
+    % new variable order: dummy variable, free variables, nonnegatives, rest
+    c  = [zeros(1,dummy);  c(freeVars);    c(nonnegVars);    c(otherVars)];
+    A  = [zeros(m,dummy),  A(:,freeVars),  A(:,nonnegVars),  A(:,otherVars)];
+    
+    xf = x0(freeVars) ;
+    x0 = [zeros(1,dummy); xf; x0(nonnegVars);   x0(otherVars)];
+    if dummy
+        x0(1) = 1 + norm(xf);
+    end
+    
+    K0 = {};
+    if any(freeVars)
+        K0 = horzcat(K0, struct('type', 'socp', 'dim', sum(freeVars)+1));
+    end
+    if any(nonnegVars)
+        K0 = horzcat(K0, struct('type', 'lp', 'dim', sum(nonnegVars)));
+    end
+    K = horzcat(K0, K(keepCones));
+    
+    % compute the permutation of variables that arranges everything back
+    ind = 1:n;
+    ind = [ind(freeVars), ind(nonnegVars), ind(otherVars)];
+    if dummy
+        ind = [n+1, ind];
+        ind(ind) = 1:n+1;
+        ind = ind(1:end-1);
+    else
+        ind(ind) = 1:n;
+    end
+    backTrafo = ind;
+    
+    Kdims = dims(K);
+    
+return
+
+
+function Kdims = dims(K)
+
     Kdims = zeros(length(K),1);
     for i=1:length(K)
         Kdims(i) = K{i}.dim;
     end
     
 return
+
 
 function inputCheck(A, b, c, K)
 
@@ -225,12 +359,8 @@ function inputCheck(A, b, c, K)
     if n ~= size(c,1)
         error('Dimension of (column) vector c must match the number of columns in A.');
     end
-    
-    N = 0;
-    for i = 1:length(K)
-        N = N + K{i}.dim;
-    end
-    if n ~= N
+
+    if n ~= sum(dims(K))
         error('Dimension of (column) vector c must match the dimension of the cone K');
     end
     

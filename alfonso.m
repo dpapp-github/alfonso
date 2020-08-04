@@ -18,9 +18,10 @@
 %          David Papp       <dpapp@ncsu.edu>
 %          Sercan Yildiz    <syildiz@email.unc.edu>  
 %
-% Date: 10/01/2019
+% Version: 2020/07/20
 % 
-% This code has been developed and tested with Matlab R2016b.
+% This code has been developed and tested with Matlab R2016b and
+% Octave v.4.4.1.
 % -------------------------------------------------------------------------
 % EXTERNAL FUNCTIONS CALLED IN THIS FILE
 % None.
@@ -45,6 +46,8 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 % gH_Params:                    parameters required by the method gH; may
 %                               be replaced by [] if no parameters needed
 % opts:                         algorithmic options
+% - opts.maxIter:               maximum number of interior-point iterations.
+%                               default value: 10000
 % - opts.predLineSearch:        0 if a fixed step size is to be used in the 
 %                               predictor step. 1 if the step size is to be 
 %                               determined via line search in the predictor
@@ -57,7 +60,7 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 %                               maxCorrSteps corrector steps if the iterate 
 %                               is in the eta-neighborhood. default value: 1.
 % - opts.optimTol:              optimization tolerance parameter. default
-%                               value: 1e-06.
+%                               value: 1e-06. minimum value: eps.
 % - opts.maxCorrLSIters:        maximum number of line search iterations in
 %                               each corrector step. default value: 8.
 % - opts.maxSmallPredSteps:     maximum number of predictor step size 
@@ -71,15 +74,9 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 %
 % OUTPUT
 % results:                  final solution and iteration statistics
-% - results.status          solver status: 1 = success, 0 = infeasible problem, everything else is trouble
-% - results.statusString    solver status string
+% - results.status:         solver status: 1 = success, 0 = infeasible problem, everything else is trouble
+% - results.statusString:   solver status string
 % - results.nIterations:	total number of iterations
-% - results.alphaPred:      predictor step size at each iteration
-% - results.betaPred:       neighborhood parameter at the end of the
-%                           predictor phase at each iteration
-% - results.etaCorr:        neighborhood parameter at the end of the
-%                           corrector phase at each iteration
-% - results.mu:             complementarity gap at each iteration
 % - results.x:              final value of the primal variables
 % - results.s:              final value of the dual slack variables
 % - results.y:              final value of the dual free variables
@@ -87,6 +84,13 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 % - results.kappa:          final value of the kappa-variable
 % - results.pObj:           final primal objective value
 % - results.dObj:           final dual objective value
+% - results.options:        options structure used in the computation
+% - results.alphaPred:      predictor step size at each iteration
+% - results.betaPred:       neighborhood parameter at the end of the
+%                           predictor phase at each iteration
+% - results.etaCorr:        neighborhood parameter at the end of the
+%                           corrector phase at each iteration
+% - results.mu:             complementarity gap at each iteration
 % - results.dGap:           final duality gap
 % - results.cGap:           final complementarity gap
 % - results.rel_dGap:       final relative duality gap   
@@ -103,7 +107,7 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
 % --------------------------------------------------------------------------
 
     if nargin == 4
-        opts = struct([]);
+        opts = struct();
     elseif nargin < 4
         error('alfonso needs more input arguments.')
     elseif nargin > 5
@@ -111,8 +115,11 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
     end
     
     % sets algorithmic options
-    opts = setOpts(opts); 
-   
+    opts = setOpts(opts);
+    
+    % say hello, alfonso
+    say_hello(opts);
+    
     % checks the problem data for consistency
     inputCheck(probData);
 
@@ -121,15 +128,15 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
     if ~in
         error('Specified initial point is not in the cone.');
     end
-    bnu = (-g'*x0) + 1;  % nu-bar = nu+1, where nu = g(x0)'*x0 is the barrier parameter;
+    bnu = (-g'*x0) + 1;  % nu-bar = nu+1, where nu = g(x0)'*x0 is the barrier parameter
     if isfield(gH_Params,'bnu')
         if abs(gH_Params.bnu-bnu) > 1e-12
-            warning(sprintf('Specified and computed gH_Params.bnu arguments do not agree. Specified: %d; computed: %d', gH_Params.bnu, bnu));
+            warning('Specified and computed gH_Params.bnu arguments do not agree. Specified: %d; computed: %d', gH_Params.bnu, bnu);
         end
     else
         gH_Params.bnu = bnu;
         if opts.verbose
-            disp(['Barrier parameter set to nu = ', num2str(bnu-1)]);
+            disp(['barrier parameter set to nu = ', num2str(bnu-1)]);
         end
     end
     
@@ -139,15 +146,17 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
     b = probData.b;
     c = probData.c;
     
-    probData.LHS = ...
-    [ sparse(m,m)   A               -b            sparse(m,n)    sparse(m,1) ;
-     -A'            sparse(n,n)      c           -speye(n)       sparse(n,1) ;
-      b'           -c'               0            sparse(1,n)   -1          ;
-      sparse(n,m)   speye(n)         sparse(n,1)  speye(n)       sparse(n,1) ;
-      sparse(1,m)   sparse(1,n)      1            sparse(1,n)    1          ];
-
+    if opts.maxItRefineSteps > 0 
+        probData.LHS = ...
+        [ sparse(m,m)   A               -b            sparse(m,n)    sparse(m,1) ;
+         -A'            sparse(n,n)      c           -speye(n)       sparse(n,1) ;
+          b'           -c'               0            sparse(1,n)   -1          ;
+          sparse(n,m)   speye(n)         sparse(n,1)  speye(n)       sparse(n,1) ;
+          sparse(1,m)   sparse(1,n)      1            sparse(1,n)    1          ];
+    end
+    
     % sets the solution method for the Newton system
-    myLinSolve = @linSolve3;
+    myLinSolve = @linSolve5;
    
     % sets algorithmic parameters
     algParams = setAlgParams(gH_Params, opts);
@@ -169,19 +178,29 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
     % creates the central primal-dual iterate corresponding to x0
     soln = initSoln(x0, probData, gH, gH_Params);
     
+    if ~opts.debug
+        if isOctave()
+            warning('off','Octave:nearly-singular-matrix');
+        else
+            warning('off','MATLAB:nearlySingularMatrix');
+        end
+    end
     termFlag  = 0;
     numIters  = 0;
     stopwatch = tic;
     elapsed   = 0;
-    for iter = 1:algParams.maxIter
+  
+    for iter = 1:algParams.maxIter+1
 
         % checks progress towards termination criteria
         [status, metrics] = term(soln, probData, algParams, termConsts);
-                
-        if termFlag || ~strcmpi(status, 'UNKNOWN')
+            
+        if termFlag || iter == algParams.maxIter+1 || (status ~= -99 && status ~= -6) 
+            if iter == algParams.maxIter+1
+                status = 0; % 'Number of iterations exceeded opts.maxIter.';
+            end
+            
             numIters = iter-1;
-            disp(['Done in ', int2str(numIters), ' iterations.']);
-            disp(['Status = ', status]);
             break;
         end
         
@@ -198,8 +217,12 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
         results.betaPred(iter)  = betaPred;
         % raises a termination flag if predictor phase was not successful
         if predStatus == 0
-            results.betaPred(iter) = results.etaCorr(iter-1);
-            fprintf('Predictor could not improve the solution.\n');
+            if iter > 1
+                results.betaPred(iter) = results.etaCorr(iter-1);
+            end
+            if opts.verbose
+                fprintf('Predictor could not improve the solution.\n');
+            end
             termFlag = 1;
         end
 
@@ -213,7 +236,9 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
                 % exits corrector phase and raises a termination flag if 
                 % last corrector step was not successful
                 if corrStatus == 0
-                    fprintf('Corrector could not improve the solution.\n');
+                    if opts.verbose
+                        fprintf('Corrector could not improve the solution.\n');
+                    end
                     termFlag = 1; break;
                 end
                 % exits corrector phase if corrCheck == 1 and current
@@ -225,9 +250,11 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
                 end
             end
             % raises a termination flag if corrector phase was not successful
-            if results.etaCorr(iter) > algParams.eta
-                fprintf('Corrector phase finished outside the eta-neighborhood.\n');
-                termFlag = 1;      
+            if opts.debug && results.etaCorr(iter) > algParams.eta
+                if opts.verbose
+                    fprintf('Corrector phase finished outside the eta-neighborhood.\n');
+                end
+                %termFlag = 1;      
             end
         end
         results.mu(iter) = soln.mu;
@@ -235,9 +262,18 @@ function results = alfonso(probData, x0, gH, gH_Params, opts)
         elapsed = toc(stopwatch);
     end
     
+    if isOctave()
+        warning('on','Octave:nearly-singular-matrix');
+    else
+        warning('on','MATLAB:nearlySingularMatrix');
+    end
     % prepares final solution and iteration statistics
-    results = prepResults(results, status, soln, probData, numIters, elapsed);
+    results = prepResults(results, status, soln, probData, numIters, elapsed, opts);
 
+    if opts.verbose
+        disp(['Done in ', int2str(numIters), ' iterations.']);
+        disp(['Status = ', results.statusString]);
+    end
 return
 
 function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probData, gH, gH_Params, myLinSolve, algParams, opts)
@@ -305,7 +341,7 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
         solnAlpha.kappa     = kappa + alpha*dsoln.kappa;            
 
         [solnAlpha.in, solnAlpha.g, solnAlpha.H, solnAlpha.L] = gH(solnAlpha.x, gH_Params);
-
+        
         % primal iterate is inside the cone
         if solnAlpha.in
             solnAlpha.mu	= (solnAlpha.x'*solnAlpha.s +...
@@ -490,11 +526,11 @@ function dsoln = linSolveMain(soln, probData, RHS, myLinSolve, algParams, opts)
     
 return
 
-function [delta, probData] = linSolve3(soln, probData, RHS)
+function [delta, probData] = linSolve5(soln, probData, RHS)
 % This method implements a block solver for the Newton system.
 % --------------------------------------------------------------------------
-% USAGE of "linSolve3"
-% delta = linSolve3(soln, probData, RHS)
+% USAGE of "linSolve5"
+% delta = linSolve5(soln, probData, RHS)
 % --------------------------------------------------------------------------
 % INPUT
 % soln:         current iterate
@@ -513,7 +549,7 @@ function [delta, probData] = linSolve3(soln, probData, RHS)
     c = probData.c;
     [m, n] = size(A);
     
-    if issparse(A) && nnz(soln.L)/numel(soln.L) < 1e-2
+    if issparse(A) && issparse(soln.L)
         L = sparse(soln.L);
         b = sparse(b);
         c = sparse(c);
@@ -522,35 +558,55 @@ function [delta, probData] = linSolve3(soln, probData, RHS)
         L = full(soln.L);
     end
     
+    mu     = soln.mu;
+    tau    = soln.tau;
+    
     ry     = RHS(1:m);
     rx     = RHS(m+(1:n));
     rtau   = RHS(m+n+1);
     rs     = RHS(m+n+1+(1:n));
     rkappa = RHS(end);
 
-    %LiAt    = L\A';
-    %Lic     = L\c;
-    %AHic    = LiAt'*Lic;
-    %LHSdydtau   = [sparse(m,m), -b; b', soln.mu/soln.tau^2] + [LiAt'*LiAt, -AHic; -AHic', Lic'*Lic]/soln.mu;
-
-    Hic     = L'\(L\c);
-    HiAt    = -L'\(L\A');
-    LHSdydtau   = [zeros(m,m), -b; b', soln.mu/soln.tau^2] - [A; -c']*[HiAt, Hic]/soln.mu;
-
+    LiAt    = L\A';
+    Lic     = L\c;
+    AHic    = LiAt'*Lic;
+    
     Hirxrs      = L'\(L\(rx+rs));
     RHSdydtau   = [ry; rtau+rkappa] - [A; -c']*Hirxrs/soln.mu;
-    dydtau      = LHSdydtau\RHSdydtau;
-    %%dx          = (Hirxrs + L'\([LiAt, -Lic]*dydtau))/soln.mu;
-    dx          = (Hirxrs - [HiAt, Hic]*dydtau)/soln.mu;
+    
+    x = RHSdydtau(1:end-1);
+    y = RHSdydtau(end);
+    
+    dinv = (mu/tau^2 + Lic'*Lic/mu)^(-1);
+    if isOctave() || nnz(LiAt)/numel(LiAt) > 0.1
+        dy = (LiAt'*LiAt/mu + (b+AHic/mu)*dinv*(b-AHic/mu)') \ (x+(b+AHic/mu)*dinv*y);
+    else
+        dy = rk1upsolve(LiAt/sqrt(mu), -(b+AHic/mu)*dinv, b-AHic/mu, (x+(b+AHic/mu)*dinv*y));
+    end
+    dtau = dinv*((-b + AHic/mu)'*dy + y);
+    
+    dx = (Hirxrs + L'\([LiAt, -Lic]*[dy; dtau]))/soln.mu;
     
     delta               = zeros(m+2*n+2, 1);
-    delta(1:m)          = dydtau(1:m);
-    delta(m+n+1)        = dydtau(m+1);
+    delta(1:m)          = dy;
+    delta(m+n+1)        = dtau;
     delta(m+(1:n))      = dx;
-    delta(m+n+1+(1:n))  = -rx - [A', -c]*dydtau;
-    delta(end)          = -rtau + b'*dydtau(1:m) - c'*dx;
+    delta(m+n+1+(1:n))  = -rx - [A', -c]*[dy; dtau];
+    delta(end)          = -rtau + b'*dy - c'*dx;
     
 return
+
+function x = rk1upsolve(Z, u, v, b)
+% subroutine for linsolve5
+% solve (Z'*Z - uv') x = b (assuming Z sparse, full column rank)
+
+    zy = Z\(Z'\[u,b]);
+    z = zy(:,1);
+    y = zy(:,2);
+    x = y + (v'*y)/(1-v'*z)*z;
+    
+return
+
 
 
 function opts = setOpts(opts)
@@ -573,11 +629,14 @@ function opts = setOpts(opts)
     if ~isfield(opts, 'maxCorrSteps'); opts.maxCorrSteps = 4; end
     if ~isfield(opts, 'corrCheck'); opts.corrCheck = 1; end
     if ~isfield(opts, 'optimTol'); opts.optimTol = 1e-06; end
+    if opts.optimTol < eps, opts.optimTol = eps; end
+    if ~isfield(opts, 'debug'); opts.debug = 0; end
     if ~isfield(opts, 'maxCorrLSIters'); opts.maxCorrLSIters = 8; end
     if ~isfield(opts, 'maxPredSmallSteps'); opts.maxPredSmallSteps = 8; end
     if ~isfield(opts, 'maxItRefineSteps'); opts.maxItRefineSteps = 0; end
     if ~isfield(opts, 'verbose'); opts.verbose = 1; end
-    
+    if ~isfield(opts, 'maxIter'); opts.maxIter = 10000; end
+
 return
 
 function algParams = setAlgParams(gH_Params, opts)
@@ -593,7 +652,7 @@ function algParams = setAlgParams(gH_Params, opts)
 % OUTPUT
 % algParams:                        algorithmic parameters
 % - algParams.maxIter:              maximum number of iterations
-% - algParams.optimTol:               optimization tolerance parameter
+% - algParams.optimTol:             optimization tolerance parameter
 % - algParams.alphaCorr:            corrector step size
 % - algParams.predLSMulti:          predictor line search step size
 %                                   multiplier
@@ -613,7 +672,7 @@ function algParams = setAlgParams(gH_Params, opts)
 % None.
 % --------------------------------------------------------------------------
 
-    algParams.maxIter           = 10000;
+    algParams.maxIter           = opts.maxIter;
     algParams.optimTol          = opts.optimTol;
     
     algParams.alphaCorr         = 1.0;
@@ -673,12 +732,6 @@ function algParams = setAlgParams(gH_Params, opts)
                 algParams.eta        = 0.0332;
                 cPredFix             = 0.0525;
             end
-%         case 22 % this is 1, EXPERIMENTAL ???
-%             algParams.beta = 0.20;
-%             algParams.eta  = 0.20*0.5;
-%             cPredFix       = 0.02;
-%             algParams.maxCorrSteps = 1;
-%             opts.predLineSearch = 0;
         otherwise
             error('The maximum number of corrector steps can be 1, 2, or 4.');
     end
@@ -733,7 +786,7 @@ function [status, metrics] = term(soln, probData, algParams, termConsts)
 % This method checks the termination criteria.
 % --------------------------------------------------------------------------
 % USAGE of "term"
-% [status, metrics] = term(soln, probData, algParams, termConsts)
+% [status, statusString, metrics] = term(soln, probData, algParams, termConsts)
 % --------------------------------------------------------------------------
 % INPUT
 % soln:         current iterate
@@ -742,8 +795,9 @@ function [status, metrics] = term(soln, probData, algParams, termConsts)
 % termConsts:   constants for termination criteria
 %
 % OUTPUT
-% status:	problem status
-% metrics:	convergence metrics
+% status:	    problem status code
+% statusString: problem status as an interpretable string
+% metrics:	    convergence metrics
 % --------------------------------------------------------------------------
 % EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
 % None.
@@ -783,27 +837,34 @@ function [status, metrics] = term(soln, probData, algParams, termConsts)
     K   =    tau <= tol * 1e-02 * min(1, kappa);
     M   =    mu  <= tol * 1e-02 * mu0;
 
+    % are we at least in the ballpark?
+    Papx   = metrics.P <= sqrt(tol);
+    Dapx   = metrics.D <= sqrt(tol);
+    Aapx  =  metrics.A <= sqrt(tol);
+    
     if P && D && AA
-        status = 'Approximately optimal solution found.';
+        status = 1;         % success!
     elseif P && D && G && T
         if by > -tol && cx > -tol
-            status = 'Primal infeasibility detected.';
+            status = -1;    % P is infeasible
         elseif by < tol && cx < tol
-            status = 'Dual infeasibility detected.';
+            status = -2;    % D is infeasible
         elseif by > -tol && cx < tol
-            status = 'Primal and dual infeasibility detected.';
+            status = -3;    % P and D both infeasible
         else
-            status = 'Problem is nearly primal or dual infeasible.';
+            status = -4;    % P or D is near infeasible
         end
     elseif K && M
-        status = 'Problem is ill-posed.';
+        status = -8;        % ill-posed, likely no strong duality
+    elseif Papx && Dapx && Aapx
+        status = -6;        % no progress, but we are in the ballpark
     else
-        status = 'UNKNOWN';
+        status = -99;       % unknown error
     end
 
 return
 
-function results = prepResults(results, status, soln, probData, iter, time)
+function results = prepResults(results, status, soln, probData, iter, time, options)
 % This method prepares the final solution and iteration statistics.
 % --------------------------------------------------------------------------
 % USAGE of "prepResults"
@@ -817,9 +878,12 @@ function results = prepResults(results, status, soln, probData, iter, time)
 % - results.etaCorr:    neighborhood parameter at the end of the corrector
 %                       phase at each iteration
 % - results.mu:         complementarity gap at each iteration
+% status:               final problem status
 % soln:                 current iterate
 % probData:             data for the conic optimization problem
 % iter:                 iteration count
+% time:                 solver time
+% options:              solver options structure
 %
 % OUTPUT
 % results:	final solution and iteration statistics
@@ -848,6 +912,9 @@ function results = prepResults(results, status, soln, probData, iter, time)
     results.pObj    = probData.c'*results.x;
     results.dObj    = probData.b'*results.y;
     
+    % solver options structure
+    results.options = options;
+    
     % final duality and complementarity gaps
     results.dGap    = results.pObj - results.dObj;
     results.cGap    = results.s'*results.x;
@@ -861,37 +928,35 @@ function results = prepResults(results, status, soln, probData, iter, time)
     results.dRes    = probData.c - probData.A'*results.y - results.s;
     
     % final primal and dual infeasibilities
-    results.pIn     = norm(results.pRes);
-    results.dIn     = norm(results.dRes);
+    results.pIn     = norm(results.pRes,Inf);
+    results.dIn     = norm(results.dRes,Inf);
         
     % final relative primal and dual infeasibilities
     results.rel_pIn = results.pIn/(1+norm(probData.b,Inf));
     results.rel_dIn = results.dIn/(1+norm(probData.c,Inf));
 
-    switch status
-        case 'Approximately optimal solution found.'
-            results.status = 1;
-            
-        case 'Primal infeasibility detected.'
-            results.status = -1;
-            
-        case 'Dual infeasibility detected.'
-            results.status = -2;
-            
-        case 'Primal and dual infeasibility detected.'
-            results.status = -3;
-            
-        case 'Problem nearly primal or dual infeasible.'
-            results.status = -4;
-            
-        case 'Problem is ill-posed.'
-            results.status = -8;
-            
-        case 'UNKNOWN'
-            results.status = 99;
-    end
+    results.status = status;
     
-    results.statusString    = status;
+    switch status
+        case 1
+            results.statusString = 'Optimal solution found.';
+        case 0
+            results.statusString = 'Number of iterations exceeded opts.maxIter.';
+        case -1
+            results.statusString = 'Primal infeasibility detected.';
+        case -2
+            results.statusString = 'Dual infeasibility detected.';
+        case -3
+            results.statusString = 'Primal and dual infeasibility detected.';
+        case -4
+            results.statusString = 'Problem is nearly primal or dual infeasible.';
+        case -6
+            results.statusString = 'Approximate/inaccurate solution found.';
+        case -8
+            results.statusString = 'Problem is ill-posed.';
+        otherwise
+            results.statusString = 'UNKNOWN';
+    end
 
 return
 
@@ -923,4 +988,18 @@ function [] = inputCheck(probData)
         error('Dimension of (column) vector c must match the number of columns in A.');
     end
         
+return
+
+function say_hello(opts)
+
+    if opts.verbose
+        fprintf('\n*** alfonso (ver. 2020/07/20) by David Papp and Sercan Yildiz, (c) 2018.\n');
+        if opts.predLineSearch
+            fprintf('step size: line search,  ');
+        else
+            fprintf('step size: safe fixed,  ');
+        end
+        fprintf('optimality tolerance: %#.2e\n', opts.optimTol);
+    end
+    
 return

@@ -1,4 +1,4 @@
-`-------------------------------------------------------------------------
+-------------------------------------------------------------------------
 Copyright (C) 2018 David Papp and Sercan Yildiz.
 
 Authors:  
@@ -19,57 +19,21 @@ ALgorithm FOr Non-Symmetric Optimization
 This code is an implementation of the algorithm for non-symmetric conic 
 optimization which originally appeared in:
 
-A. Skajaa and Y. Ye, A homogeneous interior-point algorithm for nonsymmetric 
-convex conic optimization, Mathematical Programming Ser. A, 150 (2015), 
-pp. 391-422. Available at https://doi.org/10.1007/s10107-014-0773-1.
+  A. Skajaa and Y. Ye, A homogeneous interior-point algorithm for
+  nonsymmetric convex conic optimization, Mathematical Programming
+  Ser. A, 150 (2015), pp. 391-422.
+  URL: https://doi.org/10.1007/s10107-014-0773-1.
 
 The implementation is based on the corrected analysis of the algorithm
 presented in:
 
-D. Papp and S. Yildiz. On “A homogeneous interior-point algorithm for
-nonsymmetric convex conic optimization”. Available at 
-https://arxiv.org/abs/1712.00492.
+  D. Papp and S. Yildiz. On “A homogeneous interior-point algorithm for
+  nonsymmetric convex conic optimization”.
+  URL: https://arxiv.org/abs/1712.00492.
 
 
 alfonso_simple.m
-This code implements a simple user-expandable interface for alfonso.
-
-
-polyEnv.m
-This code is an implementation of the sum-of-squares optimization approach 
-based on non-symmetric conic optimization and polynomial interpolants 
-presented in:
-
-D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
-programming. Available at https://arxiv.org/abs/1712.01792.
-
-The implementation formulates and solves the polynomial envelope problem
-described in the same reference. 
-
-
-random_lp.m
-This code formulates and solves a random linear programming problem.
-
-
-demo_polyEnv.m
-This script demonstrates how to use the provided methods to solve the
-polynomial envelope problem described in:
-
-D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
-programming. Available at https://arxiv.org/abs/1712.01792.
-
-
-demo_polyOpt.m
-This script demonstrates how to use the provided methods to solve the
-polynomial optimization problems described in:
-
-D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
-programming. Available at https://arxiv.org/abs/1712.01792.
-
-
-demo_lp.m
-This script demonstrates how to use the provided methods to solve a 
-random linear programming problem.
+This code implements a simple user-extensible interface for alfonso.
 
 
 residual3p.m
@@ -79,55 +43,27 @@ Cleve Moler from a MATLAB Central Blog post which is available at
 https://blogs.mathworks.com/cleve/2015/03/02/triple-precision-accumlated-inner-product/.
 
 
-ChebInterval.m
-This code generates parameters for the interpolant basis representation
-of univariate sum-of-squares polynomials.
+examples
+This folder contains a number of optimization problems solved with alfonso
+or alfonso_simple
 
 
-PaduaSquare.m
-This code generates parameters for the interpolant basis representation
-of bivariate sum-of-squares polynomials.
+examples/random_lp
+A minimal example: solving large random linear programs in standard form
+with alfonso and alfonso_simple.
 
 
-FeketeCube.m
-This code generates parameters for the interpolant basis representation
-of sum-of-squares polynomials with three or more variables. It follows
-the approach described in:
+examples/poly_opt
+Several problems related to polynomial optimization. These problems are detailed in the publication
 
-A. Sommariva and M. Vianello, Computing approximate Fekete points by QR
-factorizations of Vandermonde matrices, Computers & Mathematics with
-Applications, 57 (2009), pp. 1324-1336. Available at
-https://doi.org/10.1016/j.camwa.2008.11.011.
+  Papp, D; Yildiz, S: Sum-of-squares optimization without semidefinite
+  programming. SIAM Journal on Optimization 29(1), 2019, pp. 822-851. 
+  URL: https://doi.org/10.1137/17M1160124
 
 
-polyOpt.m
-This code is an implementation of the sum-of-squares optimization approach 
-based on non-symmetric conic optimization and polynomial interpolants 
-presented in:
-
-D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
-programming. Available at https://arxiv.org/abs/1712.01792.
-
-The implementation formulates and solves the polynomial optimization
-problems described in the same reference. 
+examples/exp_design
+An optimal design of experiments problem with synthetic data
 
 
-EXTERNAL FUNCTIONS CALLED IN THE PACKAGE
-
-chebpts, chebpolyval from Chebfun. Chebfun is an open-source package for  
-numerical computing with functions: http://www.chebfun.org/.
-Our code has been developed and tested with Chebfun version 5.5.0.  
-The latest version of the Chebfun package can be downloaded from
-http://www.chebfun.org/download/.
-
-
-pdpts, pdwtsMM from Padua2DM. Padua2DM is a Matlab package from M. Caliari,
-S. De Marchi, A. Sommariva, and M. Vianello for interpolation and
-cubature at the Padua points. It can be downloaded from
-http://profs.sci.univr.it/~caliari/software.htm.
-
-
-partitions. The partitions function computes all partitions of an integer.
-We use the implementation of John D'Errico from a MATLAB Central File 
-Exchange post which is available at
-https://www.mathworks.com/matlabcentral/fileexchange/12009-partitions-of-an-integer.
+examples/portfolio
+A mean-risk portfolio optimization model with a factor risk model and market impact.

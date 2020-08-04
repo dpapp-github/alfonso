@@ -1,5 +1,23 @@
-%gH_RSOC implements a barrier function for the rotated second-order cone
-%using whatever barrier for the (not rotated) second order cone is available
+%GH_RSOC implements a membership and barrier function oracle for rotated
+% second-order cones, by transformation to the second-order cone.
+% It requires no parameters.
+% --------------------------------------------------------------------------
+% USAGE of "gH_RSOC"
+% [in, g, H, L] = gH_RSOC(x)
+% --------------------------------------------------------------------------
+% INPUT
+% x:            primal iterate
+%
+% OUTPUT
+% in:	0 if x is not in the interior of the cone. 1 if x is in the
+%       interior of the cone.
+% g:	gradient of the barrier function at x
+% H:	Hessian of the barrier function at x
+% L:	Cholesky factor of the barrier function at x
+% --------------------------------------------------------------------------
+% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
+% gH_SOCP: membership and barrier function oracle for second-order cones.
+% -------------------------------------------------------------------------
 
 function [in, g, H, L] = gH_RSOC(x, ~)
 

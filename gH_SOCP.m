@@ -1,4 +1,23 @@
-%gH_SOCP implements the usual logarithmic barrier function for the second-order cone
+%GH_SOCP implements a membership and barrier function oracle for second-
+% order cones, using the standard logarithmic barrier. It requires no
+% parameters.
+% --------------------------------------------------------------------------
+% USAGE of "gH_SOCP"
+% [in, g, H, L] = gH_SOCP(x)
+% --------------------------------------------------------------------------
+% INPUT
+% x:            primal iterate
+%
+% OUTPUT
+% in:	0 if x is not in the interior of the cone. 1 if x is in the
+%       interior of the cone.
+% g:	gradient of the barrier function at x
+% H:	Hessian of the barrier function at x
+% L:	Cholesky factor of the barrier function at x
+% --------------------------------------------------------------------------
+% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
+% None.
+% -------------------------------------------------------------------------
 
 function [in, g, H, L] = gH_SOCP(x, ~)
 
