@@ -1,6 +1,3 @@
-% gH_DGPow implements the usual logarithmic barrier function
-% for the nonnegative circuit polynomial cone, aka. dual of the generalized power cone
-
 %GH_DGPOW implements a membership and barrier function oracle for the dual
 % of the generalized power cone
 %   P^*_{a} = {(x,z)\in R_+^n x R | prod((x/a).^a) >= abs(z)},
