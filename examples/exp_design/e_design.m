@@ -1,51 +1,75 @@
-function e_design()
 % Numerical experiments with E-optimal design problems comparing alfonso,
 % Mosek 9.2.6 and SCS 2.1.7
+% -------------------------------------------------------------------------
+% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
 %
+% Redistribution and use of this software are subject to the terms of the
+% 2-Clause BSD License. You should have received a copy of the license along
+% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+%
+% Authors:  
+%          David Papp       <dpapp@ncsu.edu>
+%          Sercan Yildiz    <syildiz@qontigo.com>   
+%
+% Version: 07/20/2020
 % -------------------------------------------------------------------------
 % EXTERNAL PACKAGES CALLED IN THIS FILE: YALMIP, Mosek, SCS
 % Because of these dependencies, this example will NOT run in Octave.
+% -------------------------------------------------------------------------
 
-diary('e_design_results.txt');
-datetime()
-rng(2020,'twister');
+function e_design()
+% This is the main method to run the experiments.
+% -------------------------------------------------------------------------
+% USAGE of "e_design"
+% e_design()
+% -------------------------------------------------------------------------
+% INPUT
+% None.
+%
+% OUTPUT
+% None.
+% --------------------------------------------------------------------------
 
-for i=1:5 % warning: i=6:10 is too slow for SCS
-    
-    n = 50*i;
-    p = 2*n;
+    diary('e_design_results.txt');
+    datetime()
+    rng(2020,'twister');
 
-    pars = struct('v', randn(n,p));
+    for i=1:5 % warning: i=6:10 is too slow for SCS
+        
+        n = 50*i;
+        p = 2*n;
 
-    probData = struct('c',[-1;zeros(p,1)],'A',[0,ones(1,p)],'b',1);
-    x0 = [0; ones(p,1)/p];
-    opts = struct('optimTol',1e-8);
-    
-    % ALFONSO
-    res=alfonso(probData,x0,@ex_oracle_design,pars,opts);
-    % print # of iterations and solver time
-    fprintf('alf: %d %d %.2f\n\n', n, res.nIterations, res.time);
+        pars = struct('v', randn(n,p));
 
-    % YALMIP PREP FOR MOSEK AND SCS
-    x = sdpvar(p,1);
-    t = sdpvar(1);
-    cons = [sum(x)==1, x>=0, -t*eye(n)+pars.v*diag(x)*pars.v' >= 0];
+        probData = struct('c',[-1;zeros(p,1)],'A',[0,ones(1,p)],'b',1);
+        x0 = [0; ones(p,1)/p];
+        opts = struct('optimTol',1e-8);
+        
+        % ALFONSO
+        res=alfonso(probData,x0,@ex_oracle_design,pars,opts);
+        % print # of iterations and solver time
+        fprintf('alf: %d %d %.2f\n\n', n, res.nIterations, res.time);
 
-    % MOSEK
-    opts = sdpsettings('solver','mosek','savesolveroutput',1);
-    res =  optimize(cons,-t,opts); % maximize t
-    % print only solver (not yalmip) time
-    fprintf('mos: %d %d %.2f\n\n', n, res.solveroutput.res.info.MSK_IINF_INTPNT_ITER, res.solvertime);
+        % YALMIP PREP FOR MOSEK AND SCS
+        x = sdpvar(p,1);
+        t = sdpvar(1);
+        cons = [sum(x)==1, x>=0, -t*eye(n)+pars.v*diag(x)*pars.v' >= 0];
 
-    % SCS
-    opts = sdpsettings('solver','scs','savesolveroutput',1,'scs.max_iters',100000,'scs.eps',1e-3);
-    res =  optimize(cons,-t,opts); % maximize t
-    % print only solver (not yalmip) time
-    fprintf('scs: %d %d %.2f\n\n', n, res.solveroutput.info.iter, res.solvertime); 
-end
+        % MOSEK
+        opts = sdpsettings('solver','mosek','savesolveroutput',1);
+        res =  optimize(cons,-t,opts); % maximize t
+        % print only solver (not yalmip) time
+        fprintf('mos: %d %d %.2f\n\n', n, res.solveroutput.res.info.MSK_IINF_INTPNT_ITER, res.solvertime);
 
-disp('Done!');
-diary('off');
+        % SCS
+        opts = sdpsettings('solver','scs','savesolveroutput',1,'scs.max_iters',100000,'scs.eps',1e-3);
+        res =  optimize(cons,-t,opts); % maximize t
+        % print only solver (not yalmip) time
+        fprintf('scs: %d %d %.2f\n\n', n, res.solveroutput.info.iter, res.solvertime);
+    end
+
+    disp('Done!');
+    diary('off');
 
 return
 
@@ -53,12 +77,23 @@ return
 function [in, g, H, L] = ex_oracle_design(tx, pars)
 % This function implements a membership and barrier function oracle for
 % the E-optimal design example e_design.m
-%
+% -------------------------------------------------------------------------
 % INPUT
 % tx:                   column vector representing [t; x(1); ...; x(n)]
 % pars:                 structure with a single field pars.v
 %                       pars.v is a two-dimensional array whose ith column
 %                       v(:,i) represents the ith design vector (i=1,...,p)
+%
+% OUTPUT
+% in:   0 if tx is not in the interior of the cone. 1 if tx is in the
+%       interior of the cone.
+% g:    gradient of the barrier function at tx
+% H:    Hessian of the barrier function at tx
+% L:    Cholesky factor of the barrier function at tx
+% -------------------------------------------------------------------------
+% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
+% None.
+% -------------------------------------------------------------------------
 
 t = tx(1);
 x = tx(2:end);
