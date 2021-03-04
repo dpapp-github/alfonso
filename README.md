@@ -2,7 +2,10 @@
 
 ## A fast, open-source Matlab solver for conic optimization
 
-`alfonso` is an open-source (Octave-compatible) Matlab package for solving convex optimization problems in conic form. It enables optimization over any convex cone as long as a suitable barrier is available for either the cone or its dual. This includes many nonsymmetric cones, for example, hyperbolicity cones and their duals (such as sum-of-squares cones), semidefinite and second-order cone representable cones, power cones, and the exponential cone. It also offers performance advantages for problems whose symmetric cone programming representation requires a large number of auxiliary variables or has a special structure that can be exploited in the barrier computation.
+`alfonso` is an open-source (Octave-compatible) Matlab package for solving convex optimization problems in conic form, created by Dávid Papp and Sercan Yıldız. It enables optimization over any convex cone as long as a suitable barrier is available for either the cone or its dual. This includes many nonsymmetric cones, for example, hyperbolicity cones and their duals (such as sum-of-squares cones), semidefinite and second-order cone representable cones, power cones, and the exponential cone. It also offers performance advantages for problems whose symmetric cone programming representation requires a large number of auxiliary variables or has a special structure that can be exploited in the barrier computation.
+
+The interfaces of the software are described in the accompanying software paper 
+> D. Papp and S. Yıldız. alfonso: Matlab package for nonsymmetric conic optimization. arXiv:2101.04274 [https://arxiv.org/abs/2101.04274](https://arxiv.org/abs/2101.04274) 
 
 The package also includes an implementation of the sum-of-squares optimization algorithm based on non-symmetric conic optimization and polynomial interpolants presented in:
 
