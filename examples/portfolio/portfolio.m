@@ -1,25 +1,8 @@
-% This code formulates and solves a portfolio optimization with a
-% factor risk model and market impact model, using the simple interface of
-% alfonso. See the description of the model in the header of PORTFOLIO(f,n).
-% -------------------------------------------------------------------------
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
-%
-% Authors:
-%          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>
-%
-% Version: 07/20/2020
-% -------------------------------------------------------------------------
-% EXTERNAL FUNCTIONS CALLED IN THIS FILE
-% None.
-% -------------------------------------------------------------------------
-
 function results = portfolio(f, n)
-% This is the main method for the portfolio optimization problem.
+%PORTFOLIO(f,n) formulates and solves a portfolio optimization with a
+% factor risk model and market impact model, using the simple interface of
+% alfonso. Also illustrates the linSolveFun option.
+% See the description of the model below.
 % -------------------------------------------------------------------------
 % USAGE of "portfolio"
 % results = portfolio(f, n)
@@ -31,7 +14,15 @@ function results = portfolio(f, n)
 % OUTPUT
 % results:              final solution and iteration statistics
 %                       see alfonso.m for details
+% -------------------------------------------------------------------------
+% Copyright (C) 2020 David Papp and Sercan Yildiz.
 %
+% Authors:  
+%          David Papp       <dpapp@ncsu.edu>
+%          Sercan Yildiz    <syildiz@qontigo.com>  
+%
+% Date: 2024/07/15
+% -------------------------------------------------------------------------
 % BRIEF MODEL DESCRIPTION:
 %
 % The asset return covariance matrix has the factor model structure
@@ -39,7 +30,8 @@ function results = portfolio(f, n)
 % where B is an n x f matrix, Omega is an f x f PSD matrix, and Delta is a
 % diagonal positive definite  matrix.
 %
-% Factor risk model parameters:
+% Market model parameters:
+%  - alpha:     asset expected returns (alpha's)
 %  - B:         factor exposure matrix
 %  - Omega:     factor covariance matrix
 %  - diagDelta: specific variance of asset returns
@@ -49,7 +41,6 @@ function results = portfolio(f, n)
 %  - lambda:    multipliers
 %
 % Additional model parameters:
-%  - alpha: asset expected returns (alpha's)
 %  - portfolio risk limit: gamma
 %  - initial portfolio: h
 %
@@ -118,25 +109,17 @@ function results = portfolio(f, n)
     
     A = sparse(A);
     
-    results = alfonso_simple(c, A, b, K);
+    opts.linSolveFun = @linsolveB;  % also works with linsolveA, but B is considerably faster.
+    results = alfonso_simple(c, A, b, K, [], opts);
     results.data = struct('h',h,'alpha',alpha,'beta',beta,'gamma',gamma,'Delta',sparse(diag(diagDelta)),'B',B,'Omega',Omega);
 
 return
 
 function [alpha, B, Omega, diagDelta, beta, lambda, gamma, h] = getRandomData(f,n)
-% Utility method to generate random data for the portfolio optimization problem.
-% -------------------------------------------------------------------------
-% USAGE of "getRandomData"
-% [alpha, B, Omega, diagDelta, beta, lambda, gamma, h] = getRandomData(f, n)
-% -------------------------------------------------------------------------
 
     seed = 2020;
-    if isOctave()
-        randn("state", seed);
-    else
-        rng(seed,'twister');        
-    end
-
+    rng(seed,'twister');
+    
     % market impact model parameters
     lambda = 0.1*ones(n,1);        % multipliers
     beta  = 5/3;                   % exponent

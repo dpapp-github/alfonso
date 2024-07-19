@@ -1,4 +1,4 @@
-%ALFONSO_SIMPLE is a simple, user-extensible interface for alfonso for
+%ALFONSO_SIMPLE is a simple, user-exandable interface for alfonso for
 %  solving standard form problems involving pre-defined primitive cones
 %
 % ADD NEW CONES BY ADDING NEW CASES TO THE FUNCTIONS
@@ -23,33 +23,26 @@
 %                           K{3}.dim  = 10;
 % x0:                   initial primal iterate, pass [] to be chosen by alfonso
 % opts:                 algorithmic options, see alfonso.m for details
-%   - opts.preprocess:  1 (true) to clean up the input, 0 (false) otherwise.
-%                       Default value: 1
-%   All other options are passed to alfonso.
-% -------------------------------------------------------------------------
+%   - opts.preprocess:  1 (true) to clean up the input and identify sparse structures,
+%                       0 (false) otherwise. Default value: 1
+%   - opts.ignorelp:    1 (true) to leave orthants alone in preprocessing.
+%                       Default value: 0 (false)
+%
 % OUTPUT
 % results:              final solution and iteration statistics
 %                       see alfonso.m for details
 %
 % -------------------------------------------------------------------------
-%
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz
 %
-% Version: 07/20/2020
+% Version: 2024/07/15
 % 
-% This code has been developed and tested with Matlab R2018a.
+% This code has been developed and tested with Matlab R2023b.
 % -------------------------------------------------------------------------
-% EXTERNAL FUNCTIONS CALLED IN THIS FILE
-% None.
-% --------------------------------------------------------------------------
 
 
 function results = alfonso_simple(c, A, b, K, x0, opts)
@@ -67,6 +60,9 @@ function results = alfonso_simple(c, A, b, K, x0, opts)
         otherwise
             error('alfonso_simple needs 4-6 input arguments');
     end
+    if ~isfield(opts, 'ignorelp')
+        opts.ignorelp = false;
+    end
             
     % clean up the cone
     if opts.preprocess
@@ -81,14 +77,24 @@ function results = alfonso_simple(c, A, b, K, x0, opts)
     
     % basic preprocessing
     if opts.preprocess
-        [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0);
+        [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0, opts.ignorelp);
+        if issparse(A)
+            [rB, frB, As] = sparsePreprocess(A, Kdims);
+            probData = struct('c', c, 'A', A, 'b', b, 'Kdims', Kdims, 'rB', rB, 'frB', {frB}, 'As', {As});
+            param.sparseA = true;
+        else
+            probData = struct('c', c, 'A', A, 'b', b, 'Kdims', Kdims);
+            param.sparseA = false;
+        end
     else
         Kdims = dims(K);
+        probData = struct('c', c, 'A', A, 'b', b, 'Kdims', Kdims);
+        param.sparseA = false;
     end
     
-    % solve the problem with alfonso
-    probData   = struct('c', c, 'A', A, 'b', b, 'Kdims', Kdims);
+    % solve the problem with alfonso    
     param.K    = K;
+    param.dims = Kdims;
     results    = alfonso(probData, x0, @gH_K, param, opts);
     
     % transform the solution back
@@ -122,14 +128,13 @@ function x0 = x0_K(K)
             case {'rsoc'}
                 x = [sqrt(1/2); sqrt(1/2); zeros(K{i}.dim-2,1)];
             case {'gpow'}
-                x = [ones(length(K{i}.lambda),1); 0]; % David's favorite
-                %x = [sqrt(1+K{i}.lambda); 0];        % more standard
+                x = [ones(length(K{i}.lambda),1); 0];    % not quite sure this is the best choice
             case {'dgpow'}
-                x = [ones(length(K{i}.lambda),1); 0]; % David's favorite
-                %x = [sqrt(1+K{i}.lambda); 0];        % more standard
+                x = [ones(length(K{i}.lambda),1); 0];    % not quite sure this is the best choice
             case {'exp'}
-                x = [0.7633336255892224; 0.4910129724669193; -0.4197952321239648];  % David's favorite
-                %x = [1.290927709856958; 0.8051020015847954; -0.8278383990656786];  % more standard
+                x = [0.7633336255892224; 0.4910129724669193; -0.4197952321239648];  % what else?
+            case {'grk1lmi'}
+                x = K{i}.x0;
             otherwise
                 error(['unsupported cone type: ', K{i}.type]);
         end
@@ -139,81 +144,113 @@ function x0 = x0_K(K)
 
 return
 
-
-function [in, g, H, L] = gH_K(x, params)
+% Composite gH function computed from the constituent gH functions. Used as
+% the main argument of alfonso().
+function [in, g, Hi, Li] = gH_K(x, params)
 
     K  = params.K;
     nK = length(K);
     
     in  = true;
     g   = zeros(size(x));
-    Hs  = cell(nK,1);  % doesn't do much, but helps with a warning
-    Ls  = cell(nK,1);  % doesn't do much, but helps with a warning
-    idx = 0;           % x subvector index
+    Li  = cell(nK,1);  % doesn't do much, but helps with a warning
+    Hi  = cell(nK,1);  % doesn't do much, but helps with a warning
+    
+    idx  = 0;           % x subvector index
     for i = 1:nK
         ni = K{i}.dim;
         xi = x(idx+1:idx+ni);
-        
+
         switch K{i}.type
             case {'l', 'lp'}
-                gH      = @gH_LP;
-                params  = [];         % the dimension is the only parameter, but that is obtained directly from the length of the vector
+                gH    = @gH_LP;
+                par0  = [];    % the dimension is the only parameter, but that is obtained directly from the length of the vector
             case {'soc', 'socp'}
-                gH      = @gH_SOCP;
-                params  = [];         % the dimension is the only parameter, but that is obtained directly from the length of the vector
+                gH    = @gH_SOCP;
+                par0  = [];    % the dimension is the only parameter, but that is obtained directly from the length of the vector
             case {'rsoc'}
-                gH      = @gH_RSOC;
-                params  = [];         % the dimension is the only parameter, but that is obtained directly from the length of the vector
+                gH    = @gH_RSOC;
+                par0  = [];    % the dimension is the only parameter, but that is obtained directly from the length of the vector
             case {'gpow'}
-                gH      = @gH_GPow;
-                params  = K{i}.lambda;
+                gH    = @gH_GPow;
+                par0  = K{i}.lambda;
             case {'dgpow'}
-                gH      = @gH_DGPow;
-                params  = K{i}.lambda;
+                gH    = @gH_DGPow;
+                par0  = K{i}.lambda;
             case {'exp'}
-                gH      = @gH_Exp;
-                params  = [];         % no parameters
+                gH    = @gH_Exp;
+                par0  = [];
+            case {'grk1lmi'}
+                    gH    = @gH_rk1LMI;
+                    par0  = K{i}; % struct('Vs', K{i}.Vs, 'ws', K{i}.ws, 'nonneg', K{i}.nonneg, 'ext', K{i}.ext);
             otherwise
                 error(['unsupported cone type: ', K{i}.type]);
         end
-        
+
         switch nargout
             case 4
-                [in0,g0,H0,L0] = gH(xi, params);
+                [in0,g0,Hi0,Li0] = gH(xi, par0);
             case 3
-                [in0,g0,L0]    = gH(xi, params);
+                [in0,g0,Hi0] = gH(xi, par0);
             case {1,2}
-                [in0,g0]       = gH(xi, params);
+                [in0,g0] = gH(xi, par0);
         end
-        
+
         if in0
             g(idx+1:idx+ni) = g0;
-            if nargout > 2
-                Hs{i} = sparse(H0);
-                if nargout > 3
-                    Ls{i} = sparse(L0);
+            if nargout >= 3
+                Hi{i} = Hi0;
+                if nargout == 4
+                    Li{i} = Li0;
                 end
             end
         else
-            in = 0;
-            g  = NaN;
-            H  = NaN;
-            L  = NaN;
+            in  = 0;
+            g   = NaN;
+            Hi  = NaN;
+            Li  = NaN;
             return;
         end
-        
+
         idx = idx+ni;
     end
-    
-    if nargout > 2
-        H = blkdiag(Hs{:});
-    end
-    
-    if nargout > 3
-        L = blkdiag(Ls{:});
-    end
 
+    if ~params.sparseA
+        if nargout > 2
+            Hi = @(v)(concatF(Hi,params.dims,v));
+            if nargout > 3
+                Li = @(M)(concatF(Li,params.dims,M));
+            end
+        end
+    end
+    
 return
+
+function FofM = concatF(Fs, Kdims, M)
+
+    if issparse(M)
+        
+        FMs = cell(length(Kdims),1);
+        idx = 0;  % x subvector index 
+        for i=1:length(Kdims)
+            FMs{i} = Fs{i}(M(idx+1:idx+Kdims(i), :));
+            idx = idx + Kdims(i);
+        end
+        FofM = vertcat(FMs{:});
+        
+    else
+        
+        FofM = zeros(size(M));
+        idx = 0;  % x subvector index
+        for i=1:length(Kdims)
+            FofM(idx+1:idx+Kdims(i), :) = Fs{i}(M(idx+1:idx+Kdims(i), :));
+            idx = idx + Kdims(i);
+        end
+        
+    end
+    
+return
+
 
 function K = dimPreprocess(K)
 % This method performs some basic preprocessing on the cone structure K for
@@ -235,15 +272,18 @@ function K = dimPreprocess(K)
 % OUTPUT
 % K:            updated cone structure
 % --------------------------------------------------------------------------
-% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
-% None.
-% --------------------------------------------------------------------------
 
     for i=length(K):-1:1
         if ~isfield(K{i},'dim')
             switch K{i}.type
                 case 'exp'
                     K{i}.dim = 3;
+                case 'grk1lmi'
+                    if K{i}.ext
+                        K{i}.dim = size(K{i}.ws,1) + 1;
+                    else
+                        K{i}.dim = size(K{i}.ws,1);
+                    end
                 otherwise
                     error(['missing dimension in cone ', int2str(i), ', type: ', K{i}.type]);
             end
@@ -252,10 +292,10 @@ function K = dimPreprocess(K)
             K(i) = [];
         end
     end
-    
+   
 return
 
-function [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0)
+function [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0, ignoreLP)
 % This method performs some basic preprocessing on the primal problem for
 % efficiency and compatibility with other functions. It should NOT be
 % called outside of alfonso_simple().
@@ -265,23 +305,20 @@ function [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0)
 %  - move nonnegative variables into a single orthant
 %
 % --------------------------------------------------------------------------
-% USAGE of "dimPreprocess"
-% [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0)
+% USAGE of "problemPreprocess"
+% [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0, ignore)
 % --------------------------------------------------------------------------
 % INPUT
 % c, A, b, K:   problem data and cone structure
 % x0:           initial point
+% ignoreLP:     if true (1), it does not mess with the orthants
 %
 % OUTPUT
 % c, A, b, K:   updated problem data and cone structure
 % x0:           updated initial point
 % Kdims:        array of integers, contains the dimensions of K{i}
-% trafo
-% backTrafo:      
-%
-% --------------------------------------------------------------------------
-% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
-% None.
+% backTrafo:    variable permutation to obtain the solution of the original
+%               problem from the solution of the preprocessed problem
 % --------------------------------------------------------------------------
 
     [m,n] = size(A);
@@ -294,7 +331,7 @@ function [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0)
     for i=1:length(K)
         if strcmpi(K{i}.type, 'free')
             freeVars(idx+1 : idx+K{i}.dim) = true;
-        elseif strcmpi(K{i}.type, 'l') || strcmpi(K{i}.type, 'lp')
+        elseif ~ignoreLP && (strcmpi(K{i}.type, 'l') || strcmpi(K{i}.type, 'lp'))
             nonnegVars(idx+1 : idx+K{i}.dim) = true;
         else
             keepCones(i) = true;
@@ -338,6 +375,35 @@ function [c, A, b, K, Kdims, x0, backTrafo] = problemPreprocess(c, A, b, K, x0)
     
     Kdims = dims(K);
     
+return
+
+% Identifies the block structure of A.
+% The As output is optional in case we don't really want to store the dense
+% components??
+% As: dense components of A' (transpose!)
+% rB: "row blocks", logical array (number of rows of A x number of blocks)
+% frB: columnwise find(rB)
+
+function [rB, frB, As] = sparsePreprocess(A, Kdims)
+
+    nK = length(Kdims);
+    if nargout == 3
+        As = cell(nK,1);
+    end
+
+    rB  = zeros(size(A,1), nK, 'logical');
+    frB = cell(nK,1);
+    sidx = 1;                       % starting index of the column block
+    for i=1:nK
+        eidx = sidx - 1 + Kdims(i); % ending index of the column block
+        rB(:,i) = any(A(:,sidx:eidx), 2);
+        frB{i} = find(rB(:,i));
+        if nargout == 3
+            As{i} = full(A(frB{i},sidx:eidx).');
+        end
+        sidx = eidx + 1;
+    end
+
 return
 
 

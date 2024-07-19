@@ -1,49 +1,56 @@
 %GH_LP implements a membership and barrier function oracle for the
-% nonnegative orthant, using the standard logarithmic barrier. It requires
-% no parameters.
+% nonnegative orthant, using the standard logarithmic barrier.
 % --------------------------------------------------------------------------
+% USAGE of "gH_LP"
+% [in, g, Hi, Li] = gH_LP(x)
+% --------------------------------------------------------------------------
+% INPUT
+% x:        primal iterate
 %
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
+% OUTPUT
+% in:       0 if x is not in the interior of the cone. 1 if x is in the
+%           interior of the cone.
+% g:        gradient of the barrier function at x
+% Hi:	    function representing the inverse Hessian action at x
+% Li:       function representing the inverse Cholesky action or similar
 %
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% The last 3 output may be anything if in==0.
+% --------------------------------------------------------------------------
+% Details on the last two outputs: denoting the Hessian at x by H,
+%  - Li(M) returns L\M, where L is any matrix satisfying LL' = inv(H)
+% Needs to work for a matrix.
+%  - Hi(v) returns H\v.
+% Here, v can be assumed to be a column vector (not a matrix).
+%
+% It is often sensible, but not always necessary or most efficient, to
+% implement Hi using Li or an explicitly computed Cholesky factor.
+% --------------------------------------------------------------------------
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz
 %
 % --------------------------------------------------------------------------
-% USAGE of "gH_LP"
-% [in, g, H, L] = gH_LP(x)
-% --------------------------------------------------------------------------
-% INPUT
-% x:            primal iterate
-%
-% OUTPUT
-% in:	0 if x is not in the interior of the cone. 1 if x is in the
-%       interior of the cone.
-% g:	gradient of the barrier function at x
-% H:	Hessian of the barrier function at x
-% L:	Cholesky factor of the barrier function at x
-% --------------------------------------------------------------------------
-% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
-% None.
-% -------------------------------------------------------------------------
 
-function [in, g, H, L] = gH_LP(x, ~)
+function [in, g, Hi, Li] = gH_LP(x, ~)
 
-    n  = length(x);
     in = min(x)>0;
-    
+
     if in
+        % The gradient in closed form.
         g = -1./x;
-        if nargout > 2
-            H = sparse(1:n,1:n,x.^(-2),n,n,n);
-            L = sparse(1:n,1:n,-g,n,n,n);
+
+        % Hessian-related functions in closed form.
+        if nargout >= 3
+            Hi = @(v)( (x.^2).*v );
+            if nargout == 4
+                Li = @(v)( v .* x );
+            end          
         end
     else
-        g = NaN; H = NaN; L = NaN;
+        g = NaN; Li = NaN; Hi = NaN;
     end
 
 return
+

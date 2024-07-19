@@ -4,20 +4,8 @@
 %
 % It requires no parameters and it is always three-dimensional.
 % --------------------------------------------------------------------------
-%
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
-%
-% Authors:  
-%          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
-%
-% --------------------------------------------------------------------------
 % USAGE of "gH_Exp"
-% [in, g, H, L] = gH_Exp(x)
+% [in, g, Hi, Li] = gH_Exp(x)
 % --------------------------------------------------------------------------
 % INPUT
 % x:            primal iterate
@@ -26,14 +14,22 @@
 % in:	0 if x is not in the interior of the cone. 1 if x is in the
 %       interior of the cone.
 % g:	gradient of the barrier function at x
-% H:	Hessian of the barrier function at x
-% L:	Cholesky factor of the barrier function at x
+% Hi:	function representing the inverse Hessian action at x
+% Li:   function representing the inverse Cholesky action or similar
+%
+% The last 3 output may be anything if in==0.
 % --------------------------------------------------------------------------
 % EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
 % None.
 % -------------------------------------------------------------------------
+% Copyright (C) 2020 David Papp and Sercan Yildiz.
+%
+% Authors:  
+%          David Papp       <dpapp@ncsu.edu>
+%          Sercan Yildiz
+% --------------------------------------------------------------------------
 
-function [in, g, H, L] = gH_Exp(x, ~)
+function [in, g, Hi, Li] = gH_Exp(x, ~)
 
     x1 = x(1);
     x2 = x(2);
@@ -41,6 +37,8 @@ function [in, g, H, L] = gH_Exp(x, ~)
     
     logx1px2 = log(x1/x2);
     den      = -x3 + x2*logx1px2;
+
+    g = NaN; Hi = NaN; Li = NaN; % will be overwritten if in==1
     
     in = x1 > 0 && x2 > 0 && den > 0;
     
@@ -54,24 +52,19 @@ function [in, g, H, L] = gH_Exp(x, ~)
                   -x2/x1, 1-logx1px2, 1];
         end
         
-        if nargout == 3
-            H = sparse(den^(-2) * H);
-        end
-        
-        if nargout == 4
+        if nargout >= 3
             [L, err] = chol(sparse(H), 'lower');
             
             if err > 0
-                in = false; g = NaN; H = NaN; L = NaN;
+                in = false;
                 return;
             else
-                H = den^(-2)*sparse(H);
-                L = den^(-1)*L;
+                %H = den^(-2)*sparse(H);
+                %L = den^(-1)*L;
+                Hi = @(v)( den^2 * (H\v) );
+                Li = @(M)( den * (L\M) );
             end      
         end
-        
-    else  % if not in
-        g = NaN; H = NaN; L = NaN;
     end
     
 return

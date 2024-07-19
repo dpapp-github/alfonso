@@ -3,26 +3,24 @@
 % presented in:
 %
 % D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
-% programming. SIAM Journal on Optimization 29(1), 2019, pp. 822-851.
-% URL: https://doi.org/10.1137/17M1160124, preprint available at
-% https://arxiv.org/abs/1712.01792. 
+% programming. Available at https://arxiv.org/abs/1712.01792.
 %
 % The implementation formulates and solves the polynomial envelope problem
-% described in the same reference. 
-% -------------------------------------------------------------------------
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
+% described in the same reference.
 %
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% Note: the implementation follows the paper above. With the current
+% version of alfonso, using alfonso_simple and the `rk1LMI' cone is
+% recommended, as it is far simpler and more efficient.
+% -------------------------------------------------------------------------
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz
 %
-% Version: 06/14/2018
+% Date: 2024/07/15
 %
-% This code has been developed and tested with Matlab R2016b.
+% This code has been developed and tested with Matlab R2023b.
 % -------------------------------------------------------------------------
 % EXTERNAL FUNCTIONS CALLED IN THIS FILE
 % None.
@@ -188,7 +186,7 @@ function results = polyEnv(intParams, numPolys, degPolys, tol, seed)
     
 return
 
-function [in, g, H, L] = gH_polyEnv(x, params)
+function [in, g, Hi, Li] = gH_polyEnv(x, params)
 % This method computes the gradient and Hessian of the barrier function for
 % the problem of polynomial envelopes.
 % --------------------------------------------------------------------------
@@ -225,8 +223,9 @@ function [in, g, H, L] = gH_polyEnv(x, params)
 % in:	0 if x is not in the interior of the cone. 1 if x is in the 
 %       interior of the cone.
 % g:    gradient of the barrier function at x
-% H:    Hessian of the barrier function at x
-% L:    Cholesky factor of H
+% Hi:	function representing the inverse Hessian action at x
+% Li:   function representing the inverse Cholesky action or similar
+% (see the built-in barrier functions or the documentation for more info)
 % --------------------------------------------------------------------------
 % EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
 % None.
@@ -240,8 +239,7 @@ function [in, g, H, L] = gH_polyEnv(x, params)
     PWts = params.PWts;
     
     g = zeros(numPolys*U,1);
-    H = zeros(numPolys*U);
-    L = zeros(numPolys*U);
+    L = cell(numPolys,1);
 
     % ORDER OF VARIABLES 
     % x = [x_1; x_2; ...] \in WSOS_(n,2*d)^* x WSOS_(n,2*d)^* x ...
@@ -279,19 +277,53 @@ function [in, g, H, L] = gH_polyEnv(x, params)
 
         if inPoly == 1
             g(off+(1:U)) = gPoly;
-            H(off+(1:U),off+(1:U)) = HPoly;
-            L(off+(1:U),off+(1:U)) = LPoly;
+            L{polyId} = LPoly;
             off = off + U;
         else
-            in = 0;
-            g = NaN;
-            H = NaN;
-            L = NaN;
+            in  = 0;
+            g  = NaN;
+            Li = NaN;
+            Hi = NaN;
             return;
         end
     end
 
+    if nargout >= 3
+        Hi = @(v)(concatH(L,v));
+        if nargout == 4
+            Li = @(M)(concatL(L,M));
+        end
+    end
+
 return
+
+function LiM = concatL(Ls, M)
+    
+    U = size(Ls{1},1);
+    
+    LiMs = cell(length(Ls),1);
+    idx = 0;  % x subvector index
+    for i=1:length(Ls)
+        LiMs{i} = Ls{i} \ M(idx+1:idx+U, :);
+        idx = idx + U;
+    end
+    LiM = vertcat(LiMs{:});
+
+return
+
+function Hiv = concatH(Ls, v)
+
+    U = size(Ls{1},1);
+    
+    Hiv = zeros(size(v));
+    idx = 0;  % x subvector index
+    for i=1:length(Ls)
+        Hiv(idx+1:idx+U) = Ls{i}'\(Ls{i}\v(idx+1:idx+U));
+        idx = idx + U;
+    end
+
+return
+
 
 
 function [in, g, H] = gH_SOSWt(x, P)

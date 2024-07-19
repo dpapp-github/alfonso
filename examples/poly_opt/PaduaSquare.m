@@ -1,19 +1,15 @@
 % This code generates parameters for the interpolant basis representation
 % of bivariate sum-of-squares polynomials.
 % -------------------------------------------------------------------------
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz
 %
-% Version: 06/14/2018
+% Date: 06/14/2018
 %
-% This code has been developed and tested with Matlab R2016b.
+% This code has been developed and tested with Matlab R2023b.
 % -------------------------------------------------------------------------
 % EXTERNAL FUNCTIONS CALLED IN THIS FILE
 % pdpts, pdwtsMM from Padua2DM. Padua2DM is a Matlab package from M. Caliari,

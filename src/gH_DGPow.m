@@ -7,20 +7,8 @@
 % a(:) > 0.
 %
 % --------------------------------------------------------------------------
-%
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
-%
-% Authors:  
-%          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
-%
-% --------------------------------------------------------------------------
 % USAGE of "gH_DGPow"
-% [in, g, H, L] = gH_DGPow(xz, a)
+% [in, g, Hi, Li] = gH_DGPow(xz, a)
 % --------------------------------------------------------------------------
 % INPUT
 % xz:           primal iterate xz = [x; z]
@@ -30,14 +18,29 @@
 % in:	0 if x is not in the interior of the cone. 1 if x is in the
 %       interior of the cone.
 % g:	gradient of the barrier function at x
-% H:	Hessian of the barrier function at x
-% L:	Cholesky factor of the barrier function at x
+% Hi:	    function representing the inverse Hessian action at x
+% Li:       function representing the inverse Cholesky action or similar
+%
+% The last 3 output may be anything if in==0.
 % --------------------------------------------------------------------------
-% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
-% None.
-% -------------------------------------------------------------------------
+% Details on the last two outputs: denoting the Hessian at x by H,
+%  - Li(M) returns L\M, where L is any matrix satisfying LL' = inv(H)
+% Needs to work for a matrix.
+%  - Hi(v) returns H\v.
+% Here, v can be assumed to be a column vector (not a matrix).
+%
+% It is often sensible, but not always necessary or most efficient, to
+% implement Hi using Li or an explicitly computed Cholesky factor.
+% --------------------------------------------------------------------------
+% Copyright (C) 2020 David Papp and Sercan Yildiz.
+%
+% Authors:  
+%          David Papp       <dpapp@ncsu.edu>
+%          Sercan Yildiz
+% --------------------------------------------------------------------------
 
-function [in, g, H, L] = gH_DGPow(xz, a)
+
+function [in, g, Hi, Li] = gH_DGPow(xz, a)
 
     xz = xz ./ [a;1];    % only for the dual cone
     x  = xz(1:end-1);
@@ -48,6 +51,8 @@ function [in, g, H, L] = gH_DGPow(xz, a)
     xpa    = prod(x.^a);
     in     = all(x>0) & xpa > abs(z);
     
+    g = NaN; Hi = NaN; Li = NaN; % will be overwritten if in==1
+
     if in
         %xpa    = exp(alogx);
         x2amz2 = xpa^2-z^2; %(xpa+z)*(xpa-z);
@@ -62,20 +67,17 @@ function [in, g, H, L] = gH_DGPow(xz, a)
             H = 4*x2amz2^(-2)*xpa^2*([z*a;-1]*[z*a;-1]')./([x;1]*[x;1]') + ...
                 diag( [(z^2*(-1+a)+xpa^2*(1+a))./(x2amz2*x.^2) ; -2/x2amz2] );
             H = H./([a;1]*[a;1]'); % only for the dual cone
-            
-            if nargout > 3
-                [L,err] = chol(H,'lower');
-                if err > 0
-                    in = false; g = NaN; H = NaN; L = NaN;
-                    return;
-                end
+
+            [L,err] = chol(H,'lower');
+            if err > 0
+                in = false;
+            else
+                Hi = @(v)( L'\(L\v) );
+                Li = @(M)( L\M );
             end
-        end
-    else
-        g = NaN;
-        H = NaN;
-        L = NaN;
-    end
+
+        end % if nargout > 2
+    end % if in
 
 return
 

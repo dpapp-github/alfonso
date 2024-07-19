@@ -3,26 +3,24 @@
 % presented in:
 %
 % D. Papp and S. Yildiz. Sum-of-squares optimization without semidefinite 
-% programming. SIAM Journal on Optimization 29(1), 2019, pp. 822-851.
-% URL: https://doi.org/10.1137/17M1160124, preprint available at
-% https://arxiv.org/abs/1712.01792.
+% programming. Available at https://arxiv.org/abs/1712.01792.
 %
 % The implementation formulates and solves the polynomial optimization
 % problems described in the same reference. 
-% -------------------------------------------------------------------------
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
 %
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% Note: the implementation follows the paper above. With the current
+% version of alfonso, using alfonso_simple and the `rk1LMI' cone is
+% recommended, as it is far simpler and more efficient.
+% -------------------------------------------------------------------------
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz
 %
-% Version: 06/14/2018
+% Date: 2024/07/15
 %
-% This code has been developed and tested with Matlab R2016b.
+% This code has been developed and tested with Matlab R2023b.
 % -------------------------------------------------------------------------
 % EXTERNAL FUNCTIONS CALLED IN THIS FILE
 % None.
@@ -183,7 +181,7 @@ function sol = polyOpt(intParams, polyName, tol)
     
 return
 
-function [in, g, H, L] = gH_polyOpt(x, params)
+function [in, g, Hi, Li] = gH_polyOpt(x, params)
 % This method computes the gradient and Hessian of the barrier function for
 % the polynomial optimization problem.
 % --------------------------------------------------------------------------
@@ -229,6 +227,10 @@ function [in, g, H, L] = gH_polyOpt(x, params)
     n       = params.n;
     P       = params.P;
     PWts    = params.PWts;
+
+    % in case we return somewhere with in == 0
+    Li = [];
+    Hi = [];
     
     % ORDER OF VARIABLES 
     % x \in WSOS_(n,2*d)^*
@@ -236,32 +238,51 @@ function [in, g, H, L] = gH_polyOpt(x, params)
     % for the weight 1
     [in, g, H] = gH_SOSWt(x,P);
     
-    if in == 1
+    if in
         for j = 1:n
             % for the weight (lb_j+t_j)(ub_j-t_j)
             [inWt, gWt, HWt] = gH_SOSWt(x,PWts{j});
             in  = in & inWt;
-            if in == 1
+            if in
                 g   = g+gWt;
                 H   = H+HWt;
             else
-                g   = NaN;
-                H   = NaN;
-                break;
+                return;
             end
         end
     end
     
-    if in == 1        
+    if in       
         % checks positive semidefiniteness of H one more time.
         % H may fail Cholesky factorization even if in == 1
         % due to numerical errors in summing up HWt's above.
         [L, err] = chol(H,'lower');
         in = in & (err == 0);
-    else
-        L = NaN;
+
+        if in
+            % Now we are really done.
+            %Hi = @(v)(vHiv(L,v,symmflag));
+            Hi = @(v)(L'\(L\v));
+            if nargout == 4
+                Li = @(M)(L\M);
+            end
+        end
     end
     
+return
+
+% auxiliary function for Hi
+function res = vHiv(L, v, symmflag)
+
+    if ~symmflag
+        % inv(H)*v
+        res = L'\(L\v);
+    else
+        % v'*inv(H)*v
+        Liv = L\v;
+        res = Liv.' * Liv;
+    end
+
 return
 
 function [in, g, H] = gH_SOSWt(x, P)

@@ -1,17 +1,13 @@
 % This code formulates and solves a random linear programming problem
 % utilizing the simple interface.
 % -------------------------------------------------------------------------
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz
 %
-% Version: 01/15/2019
+% Date: 2024/07/15
 %
 % This code has been developed and tested with Matlab R2016b.
 % -------------------------------------------------------------------------
@@ -62,12 +58,9 @@ function results = random_lp_simple(m, n, tol, seed)
 % None.
 % -------------------------------------------------------------------------
 
-    if isOctave()
-        rand("state", seed);
-    else
-        rng(seed, 'twister');
-    end
-
+    
+    rng(seed, 'twister');
+    
     A  = randi([-9,9],m,n);
     b  = A*ones(n,1);
     c  = randi(9,n,1);
@@ -76,7 +69,7 @@ function results = random_lp_simple(m, n, tol, seed)
     
     % INITIAL PRIMAL ITERATE
     x0 = ones(n,1);
-    [~, g0] = gH_lp(x0, []);
+    [~, g0] = gH_LP(x0, []);
     % scaling factor for the primal problem
     rP = max((1+abs(b))./(1+abs(A*x0)));
     % scaling factor for the dual problem
@@ -104,36 +97,3 @@ function results = random_lp_simple(m, n, tol, seed)
 
 end
 
-function [in, g, H, L] = gH_lp(x, ~)
-% This method computes the gradient and Hessian of the barrier function for
-% the linear program. It requires no parameters.
-% --------------------------------------------------------------------------
-% USAGE of "gH_lp"
-% [in, g, H, L] = gH_lp(x)
-% --------------------------------------------------------------------------
-% INPUT
-% x:            primal iterate
-%
-% OUTPUT
-% in:	0 if x is not in the interior of the cone. 1 if x is in the
-%       interior of the cone.
-% g:	gradient of the barrier function at x
-% H:	Hessian of the barrier function at x
-% L:	Cholesky factor of the barrier function at x
-% --------------------------------------------------------------------------
-% EXTERNAL FUNCTIONS CALLED IN THIS FUNCTION
-% None.
-% -------------------------------------------------------------------------
-
-    n  = length(x);
-    in = min(x)>0;
-    
-    if in
-        g = -1./x;
-        H = sparse(1:n,1:n,x.^(-2),n,n,n);
-        L = sparse(1:n,1:n,-g,n,n,n);
-    else
-        g = NaN; H = NaN; L = NaN;
-    end
-
-end

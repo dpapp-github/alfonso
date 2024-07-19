@@ -1,16 +1,12 @@
 % This code formulates and solves a random linear programming problem.
 % -------------------------------------------------------------------------
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz    <syildiz@email.unc.edu>  
 %
-% Version: 01/15/2019
+% Date: 01/15/2019
 %
 % This code has been developed and tested with Matlab R2016b.
 % -------------------------------------------------------------------------
@@ -61,11 +57,8 @@ function results = random_lp(m, n, tol, seed)
 % None.
 % -------------------------------------------------------------------------
 
-    if isOctave()
-        rand("state", seed);
-    else
-        rng(seed, 'twister');
-    end
+
+    rng(seed, 'twister');
 
     A  = randi([-9,9],m,n);
     b  = A*ones(n, 1);

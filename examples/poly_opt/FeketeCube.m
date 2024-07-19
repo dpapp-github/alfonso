@@ -7,17 +7,13 @@
 % Applications, 57 (2009), pp. 1324-1336. Available at
 % https://doi.org/10.1016/j.camwa.2008.11.011.
 % -------------------------------------------------------------------------
-% Copyright (C) 2018-2020 David Papp and Sercan Yildiz.
-%
-% Redistribution and use of this software are subject to the terms of the
-% 2-Clause BSD License. You should have received a copy of the license along
-% with this program. If not, see <https://opensource.org/licenses/BSD-2-Clause>.
+% Copyright (C) 2018 David Papp and Sercan Yildiz.
 %
 % Authors:  
 %          David Papp       <dpapp@ncsu.edu>
-%          Sercan Yildiz    <syildiz@qontigo.com>  
+%          Sercan Yildiz
 %
-% Version: 06/14/2018
+% Date: 06/14/2018
 %
 % This code has been developed and tested with Matlab R2016b.
 % -------------------------------------------------------------------------
@@ -57,7 +53,7 @@ function intParams = FeketeCube(n,d)
 % - intParams.pts:          approximate Fekete points for degree-(2*d)
 %                           polynomial interpolation. (intParams.U x 1) array.
 % - intParams.w:            (scaled) weights for Clenshaw-Curtis quadrature
-% - intParams.P0:           evaluations of bivariate product Chebyshev 
+% - intParams.P0:           evaluations of n-variate product Chebyshev 
 %                           polynomials of the first kind up to degree d at
 %                           the points intParams.pts
 %                           (intParams.U x intParams.L) array.
@@ -95,9 +91,9 @@ function intParams = FeketeCube(n,d)
     pts = zeros(intParams.nrPoints,n);
     for j = 1:n
         temp = 1;
-        for i = 1:j-1; temp = kron(temp,ones(intParams.nrPoints1D+i-1,1)); end;
+        for i = 1:j-1; temp = kron(temp,ones(intParams.nrPoints1D+i-1,1)); end
         temp = kron(temp,chebpts(intParams.nrPoints1D+j-1));
-        for i = j+1:n; temp = kron(temp,ones(intParams.nrPoints1D+i-1,1)); end;
+        for i = j+1:n; temp = kron(temp,ones(intParams.nrPoints1D+i-1,1)); end
         pts(:,j) = temp;
     end
     
