@@ -22,6 +22,8 @@ To cite alfonso, please mention the [research article](https://doi.org/10.1137/1
 ## What's new?
 July 2024: The `alfonso_simple` interface has a built-in barrier function for *very* efficient optimization over sets defined by the types of linear matrix inequalities that are characteristic of *sums-of-squares* optimization and *design of experiments*.
 
+July 2024: The custom barrier functions for `alfonso` are implemented using a slightly different interface: rather than returning the Hessian matrix H and its Cholesky factor L, they return a function handles representing the actions of the inverse Hessian and inverse Cholesky factor. See one of the built-in barrier functions, e.g., `gH_LP.m` for details.
+
 ## Installation
 
 `alfonso` is entirely written in Matlab m-code. To install, unzip the downloaded files in any directory and add the `src` subdirectory to the Matlab path.
