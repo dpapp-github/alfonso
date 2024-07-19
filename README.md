@@ -24,6 +24,8 @@ July 2024: The `alfonso_simple` interface has a built-in barrier function for *v
 
 July 2024: The custom barrier functions for `alfonso` are implemented using a slightly different interface: rather than returning the Hessian matrix H and its Cholesky factor L, they return a function handles representing the actions of the inverse Hessian and inverse Cholesky factor. See one of the built-in barrier functions, e.g., `gH_LP.m` for details.
 
+Big thanks to [Giovanni Fantuzzi](https://dcn.nat.fau.eu/giovanni-fantuzzi/) for his helpful discussions and the occasional beta (alpha?) testing prior to this update. 
+
 ## Installation
 
 `alfonso` is entirely written in Matlab m-code. To install, unzip the downloaded files in any directory and add the `src` subdirectory to the Matlab path.
