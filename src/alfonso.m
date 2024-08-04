@@ -325,6 +325,8 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
 % None.
 % --------------------------------------------------------------------------
 
+    prevSolnAlpha = soln;  % At least we can return the curent point if everything else fails.
+
     x       = soln.x;
     tau     = soln.tau;
     s       = soln.s;
@@ -343,6 +345,15 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
     
     % Computes the Newton direction.
     newtonDir = linSolveMain(soln, probData, RHS, myLinSolve);
+
+    % Cannot even compute a predictor direction (severe numerical issue)
+    if any(isnan(newtonDir.y))
+        predStatus = 0;
+        solnAlpha  = soln;
+        alpha      = 0;
+        betaAlpha  = NaN; % Not worth computing.
+        return;
+    end
 
     switch opts.predLineSearch
         case 0  % Fixed step size, no neighborhood checks.
@@ -425,7 +436,7 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
                 else
                     % Not in the neighborhood
                     inNbhood = false;
-                    solnAlpha.mu = NaN;
+                    %solnAlpha.mu = NaN;
                 end
 
                 if inNbhood
@@ -477,6 +488,7 @@ function [solnAlpha, alpha, betaAlpha, algParams, predStatus] = pred(soln, probD
                         % Have we failed?
                         if alpha < algParams.alphaPredThreshold
                             predStatus  = 0; % predictor has failed
+                            solnAlpha = prevSolnAlpha;
                             betaAlpha = alpha;
                             return;
                         end
@@ -600,6 +612,14 @@ function [solnAlpha, corrStatus] = corr(soln, probData, gH, gH_Params, myLinSolv
     RHS(m+n+2:end)  = -soln.psi;
     
     dsoln = linSolveMain(soln, probData, RHS, myLinSolve);
+
+    % Cannot even compute a corrector direction (severe numerical issue).
+    if any(isnan(dsoln.y))
+        corrStatus = 0;
+        solnAlpha = soln;
+        return;
+    end
+    
     alpha = algParams.alphaCorr;
     corrStatus = 1;
     
@@ -1071,7 +1091,7 @@ return
 function sayHello(opts)
 
     if opts.verbose
-        fprintf('\n*** alfonso (ver. 2023/12/01) by David Papp and Sercan Yildiz, (c) 2018.\n');
+        fprintf('\n*** alfonso (ver. 2024/07/15) by David Papp and Sercan Yildiz, (c) 2018.\n');
         switch opts.predLineSearch
             case 0
                 fprintf('step size: safe fixed,  ');
